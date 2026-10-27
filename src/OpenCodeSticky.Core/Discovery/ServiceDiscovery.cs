@@ -21,13 +21,19 @@ public sealed class ServiceDiscovery : IServiceDiscovery
             candidates.Add(new ServiceCandidate("native", NativeDisplayName(), native.Url, native.Password));
         }
 
+        var wsl = _wsl;
         IReadOnlyList<string> distros = Array.Empty<string>();
-        if (_wsl is not null)
+        if (wsl is not null)
         {
-            distros = await _wsl.ListDistrosAsync(cancellationToken);
+            distros = await wsl.ListDistrosAsync(cancellationToken);
         }
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (wsl is null)
+        {
+            return candidates;
+        }
+
         foreach (var raw in distros)
         {
             var distro = raw.Trim();
@@ -38,14 +44,14 @@ public sealed class ServiceDiscovery : IServiceDiscovery
 
             try
             {
-                var text = await _wsl.ReadServiceFileAsync(distro, cancellationToken);
+                var text = await wsl.ReadServiceFileAsync(distro, cancellationToken);
                 if (string.IsNullOrWhiteSpace(text))
                 {
                     continue;
                 }
 
                 var file = ServiceFileParser.Parse(text);
-                var alternate = await ReadAlternateAsync(distro, file.Url, cancellationToken);
+                var alternate = await ReadAlternateAsync(wsl, distro, file.Url, cancellationToken);
                 candidates.Add(new ServiceCandidate($"wsl:{distro}", distro, file.Url, file.Password, alternate));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -78,11 +84,15 @@ public sealed class ServiceDiscovery : IServiceDiscovery
         }
     }
 
-    private async Task<Uri?> ReadAlternateAsync(string distro, Uri serviceUrl, CancellationToken cancellationToken)
+    private async Task<Uri?> ReadAlternateAsync(
+        IWslGateway wsl,
+        string distro,
+        Uri serviceUrl,
+        CancellationToken cancellationToken)
     {
         try
         {
-            var address = await _wsl.GetDistroAddressAsync(distro, cancellationToken);
+            var address = await wsl.GetDistroAddressAsync(distro, cancellationToken);
             if (string.IsNullOrWhiteSpace(address))
             {
                 return null;
