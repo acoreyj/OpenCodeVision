@@ -46,6 +46,25 @@ public partial class App : Application
                 log.Write);
 
             desktop.MainWindow = new MainWindow(_monitor, settings, settingsStore, log);
+
+            var window = (MainWindow)desktop.MainWindow;
+            AppTrayIcon? tray = null;
+            try
+            {
+                tray = new AppTrayIcon(window, _monitor, window.ShowOptions, () =>
+                {
+                    window.IsQuitting = true;
+                    tray?.Dispose();
+                    _ = _monitor.DisposeAsync();
+                    desktop.Shutdown();
+                });
+                window.HasTray = true;
+            }
+            catch (Exception exception)
+            {
+                log.Write("tray unavailable: " + exception.Message);
+            }
+
             _ = StartMonitorAsync(log);
         }
 

@@ -8,6 +8,7 @@
         MaxWidth="320"
         CanResize="False"
         SizeToContent="Height"
+        SystemDecorations="None"
         WindowStartupLocation="Manual"
         Background="{StaticResource WindowBackground}"
         ShowInTaskbar="True">
@@ -50,18 +51,34 @@
   </Window.DataTemplates>
 
   <Grid RowDefinitions="Auto,Auto">
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,6,6,2">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="10,6,6,2">
       <TextBlock Text="opencode"
                  FontSize="13"
                  FontWeight="SemiBold"
-                 VerticalAlignment="Center" />
+                 VerticalAlignment="Center"
+                 Cursor="SizeAll"
+                 PointerPressed="OnTitlePressed" />
       <Button Grid.Column="1"
+              Content="⚙"
+              Click="OnOptions"
+              Background="Transparent"
+              BorderThickness="0"
+              Padding="8,2"
+              FontSize="12" />
+      <Button Grid.Column="2"
               Content="—"
               Click="OnMinimize"
               Background="Transparent"
               BorderThickness="0"
               Padding="8,2"
               FontSize="12" />
+      <Button Grid.Column="3"
+              Content="✕"
+              Click="OnCloseWindow"
+              Background="Transparent"
+              BorderThickness="0"
+              Padding="8,2"
+              FontSize="11" />
     </Grid>
 
     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

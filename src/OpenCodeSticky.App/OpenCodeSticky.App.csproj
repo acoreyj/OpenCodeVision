@@ -7,6 +7,9 @@
     <AssemblyName>OpenCodeSticky</AssemblyName>
     <RootNamespace>OpenCodeSticky.App</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <!-- Both windows take dependencies in their constructors, so the XAML
+         runtime loader cannot instantiate them. They are created in App. -->
+    <NoWarn>$(NoWarn);AVLN3001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,5 +20,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpenCodeSticky.Core\OpenCodeSticky.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 </Project>

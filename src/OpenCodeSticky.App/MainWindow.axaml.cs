@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, DispatcherTimer> _flashTimers = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _elapsedTimer;
     private string _signature = "";
+    private OptionsWindow? _options;
 
     public MainWindow(SessionMonitor monitor, Settings settings, SettingsStore store, DiagnosticsLog log)
     {
@@ -45,6 +46,33 @@ public partial class MainWindow : Window
 
         Rebuild();
     }
+
+    public bool HasTray { get; set; }
+
+    public bool IsQuitting { get; set; }
+
+    public void ShowOptions()
+    {
+        try
+        {
+            if (_options is { IsVisible: true })
+            {
+                _options.Activate();
+                return;
+            }
+
+            _options = new OptionsWindow(_monitor, _settings, _store, ApplyAlwaysOnTop);
+            _options.Closed += (_, _) => _options = null;
+            _options.Show(this);
+            _options.Activate();
+        }
+        catch (Exception exception)
+        {
+            _log.Write("options failed: " + exception);
+        }
+    }
+
+    public void ApplyAlwaysOnTop() => Topmost = _settings.AlwaysOnTop;
 
     private void OnOpened(object? sender, EventArgs e)
     {
@@ -76,6 +104,17 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        SavePlacement();
+
+        if (HasTray && !IsQuitting)
+        {
+            e.Cancel = true;
+            Hide();
+        }
+    }
+
+    private void SavePlacement()
+    {
         _settings.WindowLeft = Position.X;
         _settings.WindowTop = Position.Y;
         try
@@ -90,15 +129,48 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)
+        if (e.Key != Key.Escape)
+        {
+            return;
+        }
+
+        if (HasTray)
+        {
+            Hide();
+        }
+        else
         {
             WindowState = WindowState.Minimized;
-            e.Handled = true;
         }
+
+        e.Handled = true;
     }
 
     private void OnMinimize(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         => WindowState = WindowState.Minimized;
+
+    private void OnCloseWindow(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (HasTray)
+        {
+            Hide();
+        }
+        else
+        {
+            Close();
+        }
+    }
+
+    private void OnTitlePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
+    private void OnOptions(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        => ShowOptions();
 
     private void Rebuild()
     {
