@@ -66,13 +66,24 @@ foreach ($arch in @('x64', 'arm64')) {
     Copy-Item (Join-Path $artifacts "$rid/OpenCodeSticky") (Join-Path $contents 'MacOS/OpenCodeSticky')
     Copy-Item (Join-Path $root 'packaging/macos/Info.plist') (Join-Path $contents 'Info.plist')
     Copy-Item (Join-Path $root 'src/OpenCodeSticky.App/Assets/tray-idle.png') (Join-Path $contents 'Resources/app.png')
+
+    $published = Get-ChildItem (Join-Path $artifacts $rid) -File
+    foreach ($file in $published) {
+        Copy-Item $file.FullName (Join-Path $contents 'MacOS')
+    }
+
+    $staged = Get-ChildItem (Join-Path $contents 'MacOS') -File
+    if ($staged.Count -ne $published.Count) {
+        throw "macOS bundle for $rid is missing publish files ($($staged.Count) of $($published.Count))"
+    }
+
     if (Test-Path (Join-Path $root 'README.md')) {
         Copy-Item (Join-Path $root 'README.md') $stage
     }
 
     $wslStage = ToWsl $stage
     $wslArchive = ToWsl (Join-Path $artifacts "OpenCodeSticky-macos-$arch.tar.gz")
-    wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky' && tar -czf '$wslArchive' -C '$wslStage' OpenCodeSticky.app"
+    wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky' && tar -czf '$wslArchive' -C '$wslStage' OpenCodeSticky.app README.md"
 }
 
 Get-ChildItem $artifacts -File | Select-Object Name, Length | Format-Table -AutoSize

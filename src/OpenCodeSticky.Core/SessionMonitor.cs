@@ -16,7 +16,7 @@ public sealed class SessionMonitor : IAsyncDisposable
     private readonly TimeProvider _time;
     private readonly Action<string>? _log;
     private readonly Dictionary<string, Runtime> _runtimes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<string> _viewed = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _viewedAt = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
@@ -58,7 +58,6 @@ public sealed class SessionMonitor : IAsyncDisposable
         }
 
         _started = true;
-        await RescanAsync(cancellationToken);
 
         _rescanTimer = _time.CreateTimer(
             _ => _ = SafeAsync(() => RescanAsync(_cts.Token)),
@@ -67,10 +66,23 @@ public sealed class SessionMonitor : IAsyncDisposable
             RescanInterval);
 
         _refreshTimer = _time.CreateTimer(
-            _ => _ = SafeAsync(() => RefreshNowAsync(_cts.Token)),
+            _ => _ = SafeAsync(() => RefreshGuardedAsync(fetchPermissions: true, wait: false, _cts.Token)),
             null,
             RefreshInterval,
             RefreshInterval);
+
+        try
+        {
+            await RescanAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _log?.Invoke("initial rescan failed: " + exception.Message);
+        }
     }
 
     public async Task RescanAsync(CancellationToken cancellationToken)
@@ -94,6 +106,7 @@ public sealed class SessionMonitor : IAsyncDisposable
 
                 if (_runtimes.TryGetValue(candidate.Key, out var existing))
                 {
+                    existing.Missing = false;
                     if (!SameTarget(existing.Primary, descriptor))
                     {
                         existing.Primary = descriptor;
@@ -117,12 +130,15 @@ public sealed class SessionMonitor : IAsyncDisposable
                 }
             }
 
-            foreach (var key in _runtimes.Keys.Where(key => !seen.Contains(key)).ToArray())
+            // A service whose file disappeared stays known and offline; its rows
+            // linger through the five-minute grace period instead of vanishing.
+            foreach (var runtime in _runtimes.Values.Where(runtime => !seen.Contains(runtime.Primary.Key)))
             {
-                RemoveRuntime(key);
+                runtime.Missing = true;
+                runtime.Online = false;
             }
 
-            await RefreshCoreAsync(fetchPermissions: false, cancellationToken);
+            await RefreshCoreAsync(fetchPermissions: true, cancellationToken);
         }
         finally
         {
@@ -131,41 +147,67 @@ public sealed class SessionMonitor : IAsyncDisposable
     }
 
     public Task RefreshNowAsync(CancellationToken cancellationToken)
-        => RefreshGuardedAsync(fetchPermissions: true, cancellationToken);
+        => RefreshGuardedAsync(fetchPermissions: true, wait: true, cancellationToken);
 
-    public void SetServiceEnabled(string key, bool enabled)
+    public async Task SetServiceEnabledAsync(
+        string key,
+        bool enabled,
+        CancellationToken cancellationToken = default)
     {
-        if (!_runtimes.TryGetValue(key, out var runtime) || runtime.Enabled == enabled)
+        await _gate.WaitAsync(cancellationToken);
+        try
         {
-            return;
-        }
+            if (!_runtimes.TryGetValue(key, out var runtime) || runtime.Enabled == enabled)
+            {
+                return;
+            }
 
-        runtime.Enabled = enabled;
-        if (enabled)
-        {
-            StartPump(runtime);
-            _ = SafeAsync(() => RefreshNowAsync(_cts.Token));
-        }
-        else
-        {
-            StopPump(runtime);
-            runtime.Online = false;
-            runtime.LastRows.Clear();
-            DropBlockedFor(runtime.Primary.Key);
-        }
+            runtime.Enabled = enabled;
+            if (enabled)
+            {
+                StartPump(runtime);
+            }
+            else
+            {
+                StopPump(runtime);
+                runtime.Online = false;
+                runtime.LastRows.Clear();
+                DropBlockedFor(runtime.Primary.Key);
+            }
 
-        RebuildRows(_time.GetUtcNow());
-        UpdateServices();
-        Changed?.Invoke(this, EventArgs.Empty);
+            if (enabled)
+            {
+                await RefreshCoreAsync(fetchPermissions: true, cancellationToken);
+            }
+
+            RebuildRows(_time.GetUtcNow());
+            UpdateServices();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
-    public void MarkViewed(string serviceKey, string sessionId)
+    public async Task MarkViewedAsync(
+        string serviceKey,
+        string sessionId,
+        CancellationToken cancellationToken = default)
     {
-        _viewed.Add(sessionId);
-        _blockedKeys.Remove(BlockedKey(serviceKey, sessionId));
-        RebuildRows(_time.GetUtcNow());
-        UpdateServices();
-        Changed?.Invoke(this, EventArgs.Empty);
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            _viewedAt[sessionId] = _time.GetUtcNow();
+            RebuildRows(_time.GetUtcNow());
+            _blockedKeys = CurrentBlockedKeys();
+            UpdateServices();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -215,9 +257,17 @@ public sealed class SessionMonitor : IAsyncDisposable
         _cts.Dispose();
     }
 
-    private async Task RefreshGuardedAsync(bool fetchPermissions, CancellationToken cancellationToken)
+    private async Task RefreshGuardedAsync(bool fetchPermissions, bool wait, CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken);
+        if (wait)
+        {
+            await _gate.WaitAsync(cancellationToken);
+        }
+        else if (!await _gate.WaitAsync(0, cancellationToken))
+        {
+            return;
+        }
+
         try
         {
             await RefreshCoreAsync(fetchPermissions, cancellationToken);
@@ -234,10 +284,12 @@ public sealed class SessionMonitor : IAsyncDisposable
 
         foreach (var runtime in _runtimes.Values.Where(runtime => runtime.Enabled).ToList())
         {
-            var before = runtime.Sessions.ToDictionary(
-                session => session.Id,
-                session => StatusEvaluator.Evaluate(session, _viewed.Contains(session.Id), now),
-                StringComparer.Ordinal);
+            var previousOnline = runtime.Online;
+            var before = SessionsSnapshot(runtime)
+                .ToDictionary(
+                    session => session.Id,
+                    session => StatusEvaluator.Evaluate(session, IsLocallyViewed(session), now),
+                    StringComparer.Ordinal);
 
             var online = await FetchAsync(runtime, now, cancellationToken);
             runtime.Online = online;
@@ -245,6 +297,11 @@ public sealed class SessionMonitor : IAsyncDisposable
             if (online && fetchPermissions)
             {
                 await FetchPermissionsAsync(runtime, now, cancellationToken);
+            }
+
+            if (!online && previousOnline && runtime.Error is not null)
+            {
+                _log?.Invoke($"{runtime.Primary.Key} offline: {runtime.Error}");
             }
 
             LogChanges(runtime, before, now);
@@ -258,17 +315,30 @@ public sealed class SessionMonitor : IAsyncDisposable
 
     private async Task<bool> FetchAsync(Runtime runtime, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var attempts = new List<ServiceDescriptor> { runtime.Active };
-        if (runtime.Active.AlternateUrl is { } alternate && alternate != runtime.Active.Url)
+        var candidates = new List<ServiceDescriptor> { runtime.Active };
+
+        ServiceDescriptor? other;
+        if (runtime.Active.Url == runtime.Primary.Url)
         {
-            attempts.Add(runtime.Active with { Url = alternate, AlternateUrl = null });
+            other = runtime.Primary.AlternateUrl is { } alternate
+                ? runtime.Primary with { Url = alternate, AlternateUrl = null }
+                : null;
+        }
+        else
+        {
+            other = runtime.Primary;
         }
 
-        foreach (var attempt in attempts)
+        if (other is not null && other.Url != runtime.Active.Url)
         {
-            if (attempt.Url != runtime.Active.Url)
+            candidates.Add(other);
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Url != runtime.Active.Url)
             {
-                runtime.Active = attempt;
+                runtime.Active = candidate;
                 SwapClient(runtime);
             }
 
@@ -276,12 +346,6 @@ public sealed class SessionMonitor : IAsyncDisposable
             {
                 return true;
             }
-        }
-
-        if (runtime.Active.Url != runtime.Primary.Url)
-        {
-            runtime.Active = runtime.Primary;
-            SwapClient(runtime);
         }
 
         return false;
@@ -312,23 +376,29 @@ public sealed class SessionMonitor : IAsyncDisposable
 
     private async Task FetchPermissionsAsync(Runtime runtime, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        foreach (var session in runtime.Sessions.Where(session => session.ParentId is null).ToList())
+        var snapshot = SessionsSnapshot(runtime).Where(session => session.ParentId is null).ToList();
+
+        foreach (var session in snapshot)
         {
             try
             {
                 var count = await runtime.Client.GetPendingPermissionCountAsync(session.Id, cancellationToken);
-                var index = runtime.Sessions.FindIndex(candidate => candidate.Id == session.Id);
-                if (index < 0)
+                lock (runtime.Sync)
                 {
-                    continue;
-                }
+                    var index = runtime.Sessions.FindIndex(candidate => candidate.Id == session.Id);
+                    if (index < 0)
+                    {
+                        continue;
+                    }
 
-                var current = runtime.Sessions[index];
-                runtime.Sessions[index] = current with
-                {
-                    PendingPermissions = count,
-                    PendingSince = count > 0 ? current.PendingSince ?? now : null,
-                };
+                    var current = runtime.Sessions[index];
+                    var earliest = current.Idle ?? current.Updated ?? now;
+                    runtime.Sessions[index] = current with
+                    {
+                        PendingPermissions = count,
+                        PendingSince = count > 0 ? current.PendingSince ?? earliest : null,
+                    };
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -343,27 +413,41 @@ public sealed class SessionMonitor : IAsyncDisposable
 
     private static void MergeSessions(Runtime runtime, IReadOnlyList<SessionInfo> sessions)
     {
-        var previous = runtime.Sessions.ToDictionary(session => session.Id, StringComparer.Ordinal);
-        runtime.Sessions = sessions
-            .Select(session => previous.TryGetValue(session.Id, out var old)
-                ? session with
-                {
-                    LastEventAt = old.LastEventAt,
-                    PendingSince = old.PendingSince,
-                    PendingPermissions = old.PendingPermissions,
-                }
-                : session)
-            .ToList();
+        lock (runtime.Sync)
+        {
+            var previous = runtime.Sessions.ToDictionary(session => session.Id, StringComparer.Ordinal);
+            runtime.Sessions = sessions
+                .Select(session => previous.TryGetValue(session.Id, out var old)
+                    ? session with
+                    {
+                        LastEventAt = old.LastEventAt,
+                        PendingSince = old.PendingSince,
+                        PendingPermissions = old.PendingPermissions,
+                    }
+                    : session)
+                .ToList();
+        }
+    }
+
+    private static List<SessionInfo> SessionsSnapshot(Runtime runtime)
+    {
+        lock (runtime.Sync)
+        {
+            return runtime.Sessions.ToList();
+        }
     }
 
     private void RebuildRows(DateTimeOffset now)
     {
         var online = _runtimes.Values.Where(runtime => runtime.Enabled && runtime.Online).ToList();
         var serviceSessions = online
-            .Select(runtime => new ServiceSessions(runtime.Primary.Key, runtime.Primary.DisplayName, runtime.Sessions))
+            .Select(runtime => new ServiceSessions(
+                runtime.Primary.Key,
+                runtime.Primary.DisplayName,
+                SessionsSnapshot(runtime)))
             .ToList();
 
-        var rows = StatusEvaluator.BuildRows(serviceSessions, _viewed, now).ToList();
+        var rows = StatusEvaluator.BuildRows(serviceSessions, LocallyViewedIds(now), now).ToList();
 
         foreach (var runtime in online)
         {
@@ -385,6 +469,36 @@ public sealed class SessionMonitor : IAsyncDisposable
         _rows = rows;
     }
 
+    private HashSet<string> LocallyViewedIds(DateTimeOffset now)
+    {
+        // BuildRows receives a set of session ids, so resolve the turn-scoped
+        // marks against the current snapshots before calling it.
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var runtime in _runtimes.Values.Where(runtime => runtime.Enabled && runtime.Online))
+        {
+            foreach (var session in SessionsSnapshot(runtime))
+            {
+                if (IsLocallyViewed(session))
+                {
+                    ids.Add(session.Id);
+                }
+            }
+        }
+
+        return ids;
+    }
+
+    private bool IsLocallyViewed(SessionInfo session)
+    {
+        if (!_viewedAt.TryGetValue(session.Id, out var markedAt))
+        {
+            return false;
+        }
+
+        var reference = session.Idle ?? session.Updated;
+        return reference is null || reference <= markedAt;
+    }
+
     private void UpdateServices()
     {
         _services = _runtimes.Values
@@ -400,10 +514,7 @@ public sealed class SessionMonitor : IAsyncDisposable
 
     private void RaiseBlockedStarted()
     {
-        var blocked = _rows
-            .Where(row => row.IsBlocked && !row.IsOffline)
-            .Select(row => BlockedKey(row.ServiceKey, row.Session.Id))
-            .ToHashSet(StringComparer.Ordinal);
+        var blocked = CurrentBlockedKeys();
 
         if (!_baselineReady)
         {
@@ -426,6 +537,12 @@ public sealed class SessionMonitor : IAsyncDisposable
         _blockedKeys = blocked;
     }
 
+    private HashSet<string> CurrentBlockedKeys()
+        => _rows
+            .Where(row => row.IsBlocked && !row.IsOffline)
+            .Select(row => BlockedKey(row.ServiceKey, row.Session.Id))
+            .ToHashSet(StringComparer.Ordinal);
+
     private void DropBlockedFor(string serviceKey)
     {
         var prefix = serviceKey + "\0";
@@ -441,9 +558,9 @@ public sealed class SessionMonitor : IAsyncDisposable
             return;
         }
 
-        foreach (var session in runtime.Sessions)
+        foreach (var session in SessionsSnapshot(runtime))
         {
-            var state = StatusEvaluator.Evaluate(session, _viewed.Contains(session.Id), now);
+            var state = StatusEvaluator.Evaluate(session, IsLocallyViewed(session), now);
             if (before.TryGetValue(session.Id, out var old) && old != state)
             {
                 _log($"{runtime.Primary.Key} {session.Id} {old} -> {state}");
@@ -508,10 +625,13 @@ public sealed class SessionMonitor : IAsyncDisposable
             return;
         }
 
-        var index = runtime.Sessions.FindIndex(session => session.Id == serverEvent.SessionId);
-        if (index >= 0)
+        lock (runtime.Sync)
         {
-            runtime.Sessions[index] = runtime.Sessions[index] with { LastEventAt = serverEvent.Created };
+            var index = runtime.Sessions.FindIndex(session => session.Id == serverEvent.SessionId);
+            if (index >= 0)
+            {
+                runtime.Sessions[index] = runtime.Sessions[index] with { LastEventAt = serverEvent.Created };
+            }
         }
     }
 
@@ -549,7 +669,7 @@ public sealed class SessionMonitor : IAsyncDisposable
             runtime.RefreshPermissions = false;
         }
 
-        await SafeAsync(() => RefreshGuardedAsync(permissions, _cts.Token));
+        await SafeAsync(() => RefreshGuardedAsync(permissions, wait: false, _cts.Token));
     }
 
     private void SwapClient(Runtime runtime)
@@ -570,21 +690,6 @@ public sealed class SessionMonitor : IAsyncDisposable
         if (runtime.Enabled)
         {
             StartPump(runtime);
-        }
-    }
-
-    private void RemoveRuntime(string key)
-    {
-        var runtime = _runtimes[key];
-        _runtimes.Remove(key);
-        StopPump(runtime);
-        try
-        {
-            runtime.Client.Dispose();
-        }
-        catch
-        {
-            // Disposal is best effort.
         }
     }
 
@@ -622,6 +727,8 @@ public sealed class SessionMonitor : IAsyncDisposable
 
         public List<SessionInfo> Sessions { get; set; } = new();
 
+        public object Sync { get; } = new();
+
         public List<SessionRow> LastRows { get; set; } = new();
 
         public DateTimeOffset? LastOnlineAt { get; set; }
@@ -633,6 +740,8 @@ public sealed class SessionMonitor : IAsyncDisposable
         public bool Online { get; set; }
 
         public bool Enabled { get; set; }
+
+        public bool Missing { get; set; }
 
         public CancellationTokenSource? PumpCts { get; set; }
 

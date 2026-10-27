@@ -31,6 +31,11 @@ public sealed class WslGateway : IWslGateway
         {
             return Array.Empty<string>();
         }
+        catch
+        {
+            // A missing or broken wsl.exe means no WSL candidates.
+            return Array.Empty<string>();
+        }
     }
 
     public async Task<string?> ReadServiceFileAsync(string distro, CancellationToken cancellationToken)
@@ -43,6 +48,10 @@ public sealed class WslGateway : IWslGateway
             return result.ExitCode == 0 ? Encoding.UTF8.GetString(result.StdOut) : null;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch
         {
             return null;
         }
@@ -63,6 +72,10 @@ public sealed class WslGateway : IWslGateway
                 .FirstOrDefault();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        catch
         {
             return null;
         }

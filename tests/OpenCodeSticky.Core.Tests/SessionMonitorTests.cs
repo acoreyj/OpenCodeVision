@@ -54,7 +54,7 @@ public class SessionMonitorTests
         await monitor.StartAsync(CancellationToken.None);
         Assert.Single(monitor.Rows);
 
-        monitor.SetServiceEnabled("native", false);
+        await monitor.SetServiceEnabledAsync("native", false);
 
         Assert.Empty(monitor.Rows);
         var calls = client.SessionCalls;
@@ -146,7 +146,7 @@ public class SessionMonitorTests
         await monitor.StartAsync(CancellationToken.None);
         Assert.Equal(SessionState.WaitingForYou, monitor.Rows.Single().State);
 
-        monitor.MarkViewed("native", "ses_blue");
+        await monitor.MarkViewedAsync("native", "ses_blue");
 
         Assert.Equal(SessionState.Idle, monitor.Rows.Single().State);
     }
@@ -229,7 +229,7 @@ public class SessionMonitorTests
         discovery.Candidates.Add(Candidate(key: "wsl:Ubuntu", url: "http://127.0.0.1:2"));
         var native = new FakeClient();
         native.Sessions.Add(WorkingSession("ses_work", Now));
-        var ubuntu = new FakeClient();
+        var ubuntu = new FakeClient { PermissionCount = 1 };
         ubuntu.Sessions.Add(AmberSession("ses_amber", Now));
 
         await using var monitor = NewMonitor(
@@ -247,6 +247,106 @@ public class SessionMonitorTests
     public async Task NoServices_DoesNotThrow()
     {
         await using var monitor = NewMonitor(new FakeDiscovery(), _ => new FakeClient(), new MutableTimeProvider(Now));
+
+        await monitor.StartAsync(CancellationToken.None);
+
+        Assert.Empty(monitor.Rows);
+        Assert.Empty(monitor.Services);
+    }
+
+    [Fact]
+    public async Task MarkViewed_ExpiresWhenNewTurnStarts()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Candidates.Add(Candidate());
+        var client = new FakeClient();
+        client.Sessions.Add(BlueSession("ses_blue", Now));
+        var time = new MutableTimeProvider(Now);
+
+        await using var monitor = NewMonitor(discovery, _ => client, time);
+        await monitor.StartAsync(CancellationToken.None);
+        await monitor.MarkViewedAsync("native", "ses_blue");
+        Assert.Equal(SessionState.Idle, monitor.Rows.Single().State);
+
+        time.Advance(TimeSpan.FromMinutes(1));
+        var idle = time.Now.AddSeconds(-1);
+        client.Sessions.Clear();
+        client.Sessions.Add(Session("ses_blue", idle, idle, idle.AddMinutes(-10)));
+        await monitor.RefreshNowAsync(CancellationToken.None);
+
+        Assert.Equal(SessionState.WaitingForYou, monitor.Rows.Single().State);
+    }
+
+    [Fact]
+    public async Task MarkViewed_OnAmber_DoesNotRefireBlocked()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Candidates.Add(Candidate());
+        var client = new FakeClient { PermissionCount = 1 };
+        client.Sessions.Add(AmberSession("ses_amber", Now));
+
+        await using var monitor = NewMonitor(discovery, _ => client, new MutableTimeProvider(Now));
+        await monitor.StartAsync(CancellationToken.None);
+
+        var fired = new List<BlockedSessionEventArgs>();
+        monitor.BlockedStarted += (_, args) => fired.Add(args);
+
+        await monitor.MarkViewedAsync("native", "ses_amber");
+        await monitor.RefreshNowAsync(CancellationToken.None);
+
+        Assert.Empty(fired);
+        Assert.Equal(SessionState.WaitingApproval, monitor.Rows.Single().State);
+    }
+
+    [Fact]
+    public async Task Start_AlreadyPending_IsAmberFromFirstRefresh()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Candidates.Add(Candidate());
+        var client = new FakeClient { PermissionCount = 1 };
+        var idle = Now.AddMinutes(-10);
+        client.Sessions.Add(Session("ses_pending", idle, idle, idle));
+
+        await using var monitor = NewMonitor(discovery, _ => client, new MutableTimeProvider(Now));
+        await monitor.StartAsync(CancellationToken.None);
+
+        var row = Assert.Single(monitor.Rows);
+        Assert.Equal(SessionState.WaitingApproval, row.State);
+        Assert.Equal(idle, row.StateSince);
+    }
+
+    [Fact]
+    public async Task RemovedService_KeepsRowsForGraceThenDrops()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Candidates.Add(Candidate());
+        var client = new FakeClient();
+        client.Sessions.Add(IdleSession("ses_idle", Now));
+        var time = new MutableTimeProvider(Now);
+
+        await using var monitor = NewMonitor(discovery, _ => client, time);
+        await monitor.StartAsync(CancellationToken.None);
+        Assert.Single(monitor.Rows);
+
+        client.Failure = new HttpRequestException("down");
+        discovery.Candidates.Clear();
+        await monitor.RescanAsync(CancellationToken.None);
+
+        Assert.True(Assert.Single(monitor.Rows).IsOffline);
+        Assert.Contains(monitor.Services, service => service.Key == "native" && !service.Online);
+
+        time.Advance(TimeSpan.FromMinutes(6));
+        await monitor.RefreshNowAsync(CancellationToken.None);
+
+        Assert.Empty(monitor.Rows);
+    }
+
+    [Fact]
+    public async Task Start_DiscoveryFailure_DoesNotThrow()
+    {
+        var discovery = new FakeDiscovery { Throw = new InvalidOperationException("wsl missing") };
+
+        await using var monitor = NewMonitor(discovery, _ => new FakeClient(), new MutableTimeProvider(Now));
 
         await monitor.StartAsync(CancellationToken.None);
 

@@ -19,7 +19,7 @@ public sealed class RowViewModel : INotifyPropertyChanged
         ServiceKey = row.ServiceKey;
         SessionId = row.Session.Id;
         Project = ProjectName(row.Session.Directory);
-        _title = TitleFor(row.Session.Title);
+        _title = TitleFor(row.Session.Title, row.IsOffline);
         _tooltip = TooltipFor(row);
         _stateBrush = StateBrushes.For(row.State);
         _isOffline = row.IsOffline;
@@ -83,7 +83,7 @@ public sealed class RowViewModel : INotifyPropertyChanged
 
     public void Update(SessionRow row)
     {
-        Title = TitleFor(row.Session.Title);
+        Title = TitleFor(row.Session.Title, row.IsOffline);
         Tooltip = TooltipFor(row);
         StateBrush = StateBrushes.For(row.State);
         IsOffline = row.IsOffline;
@@ -102,11 +102,14 @@ public sealed class RowViewModel : INotifyPropertyChanged
         return string.IsNullOrEmpty(name) ? directory : name;
     }
 
-    private static string TitleFor(string title)
-        => string.IsNullOrWhiteSpace(title) ? "(untitled)" : title;
+    private static string TitleFor(string title, bool offline)
+    {
+        var text = string.IsNullOrWhiteSpace(title) ? "(untitled)" : title;
+        return offline ? text + " · offline" : text;
+    }
 
     private static string TooltipFor(SessionRow row)
-        => $"{TitleFor(row.Session.Title)}\n{row.Session.Directory}";
+        => $"{TitleFor(row.Session.Title, row.IsOffline)}\n{row.Session.Directory}";
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

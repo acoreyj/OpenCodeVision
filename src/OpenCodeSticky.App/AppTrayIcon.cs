@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Avalonia.Threading;
 using OpenCodeSticky.Core;
 
 namespace OpenCodeSticky.App;
@@ -13,6 +14,7 @@ public sealed class AppTrayIcon : IDisposable
     private readonly TrayIcon _tray;
     private readonly TrayIcons _icons;
     private SessionState _state = SessionState.Idle;
+    private int _updatePending;
     private bool _disposed;
 
     public AppTrayIcon(MainWindow window, SessionMonitor monitor, Action openOptions, Action quit)
@@ -25,7 +27,6 @@ public sealed class AppTrayIcon : IDisposable
             ToolTipText = "opencode",
             Icon = LoadIcon(SessionState.Idle),
         };
-
         var menu = new NativeMenu();
         menu.Add(Item("Show / Hide", Toggle));
         menu.Add(Item("Options…", openOptions));
@@ -54,10 +55,29 @@ public sealed class AppTrayIcon : IDisposable
         _tray.Dispose();
     }
 
-    private void OnChanged(object? sender, EventArgs e) => Update();
+    private void OnChanged(object? sender, EventArgs e)
+    {
+        if (Interlocked.Exchange(ref _updatePending, 1) == 1)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _updatePending = 0;
+                Update();
+            },
+            DispatcherPriority.Background);
+    }
 
     private void Update()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         var worst = SessionState.Idle;
         var blocked = 0;
 
@@ -92,11 +112,19 @@ public sealed class AppTrayIcon : IDisposable
     {
         if (_window.IsVisible)
         {
-            _window.Hide();
+            if (_window.HasTray)
+            {
+                _window.Hide();
+            }
+            else
+            {
+                _window.WindowState = WindowState.Minimized;
+            }
         }
         else
         {
             _window.Show();
+            _window.WindowState = WindowState.Normal;
             _window.Activate();
         }
     }

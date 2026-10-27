@@ -32,6 +32,8 @@ public interface IOpenCodeClient : IDisposable
 
 public sealed class OpenCodeClient : IOpenCodeClient
 {
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
+
     private readonly HttpClient _http;
     private readonly string _baseUrl;
 
@@ -158,14 +160,17 @@ public sealed class OpenCodeClient : IOpenCodeClient
 
     private async Task<JsonDocument> GetJsonAsync(string path, CancellationToken cancellationToken)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RequestTimeout);
+
         using var request = new HttpRequestMessage(HttpMethod.Get, _baseUrl + path);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        using var response = await _http.SendAsync(request, cancellationToken);
-        await EnsureSuccessAsync(response, cancellationToken);
+        using var response = await _http.SendAsync(request, timeout.Token);
+        await EnsureSuccessAsync(response, timeout.Token);
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token);
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)

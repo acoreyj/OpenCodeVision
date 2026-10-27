@@ -11,12 +11,14 @@ public partial class OptionsWindow : Window
     private readonly Settings _settings;
     private readonly SettingsStore _store;
     private readonly Action _applyAlwaysOnTop;
+    private readonly Action<string>? _log;
 
     public OptionsWindow(
         SessionMonitor monitor,
         Settings settings,
         SettingsStore store,
-        Action applyAlwaysOnTop)
+        Action applyAlwaysOnTop,
+        Action<string>? log = null)
     {
         InitializeComponent();
 
@@ -24,6 +26,7 @@ public partial class OptionsWindow : Window
         _settings = settings;
         _store = store;
         _applyAlwaysOnTop = applyAlwaysOnTop;
+        _log = log;
 
         var always = this.FindControl<CheckBox>("AlwaysOnTop")!;
         always.IsChecked = settings.AlwaysOnTop;
@@ -52,21 +55,29 @@ public partial class OptionsWindow : Window
 
         foreach (var service in _monitor.Services)
         {
-            var status = service.Online ? "online" : "offline";
+            var status = !service.Enabled ? "off" : service.Online ? "online" : "offline";
             var version = service.Version ?? "unknown";
             var check = new CheckBox
             {
                 IsChecked = service.Enabled,
                 Content = $"{service.DisplayName}   v{version}   {status}",
             };
+            ToolTip.SetTip(check, service.Url.ToString());
 
             var key = service.Key;
-            check.IsCheckedChanged += (_, _) =>
+            check.IsCheckedChanged += async (_, _) =>
             {
                 var enabled = check.IsChecked == true;
-                _monitor.SetServiceEnabled(key, enabled);
                 _settings.SetServiceEnabled(key, enabled);
                 Save();
+                try
+                {
+                    await _monitor.SetServiceEnabledAsync(key, enabled);
+                }
+                catch (Exception exception)
+                {
+                    _log?.Invoke("service toggle failed: " + exception.Message);
+                }
             };
 
             streams.Children.Add(check);
@@ -82,6 +93,12 @@ public partial class OptionsWindow : Window
         {
             await _monitor.RescanAsync(CancellationToken.None);
             ReloadStreams();
+        }
+        catch (Exception exception)
+        {
+            _log?.Invoke("rescan failed: " + exception.Message);
+            button.Content = "Rescan failed";
+            await Task.Delay(1200);
         }
         finally
         {

@@ -45,7 +45,7 @@ public sealed class SettingsStore
         }
 
         var temporary = _path + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(settings, Options));
+        File.WriteAllText(temporary, JsonSerializer.Serialize(settings.Snapshot(), Options));
         File.Move(temporary, _path, overwrite: true);
     }
 }

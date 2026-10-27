@@ -48,20 +48,29 @@ public partial class App : Application
             desktop.MainWindow = new MainWindow(_monitor, settings, settingsStore, log);
 
             var window = (MainWindow)desktop.MainWindow;
+            window.HasTray = !OperatingSystem.IsLinux();
             AppTrayIcon? tray = null;
             try
             {
-                tray = new AppTrayIcon(window, _monitor, window.ShowOptions, () =>
+                tray = new AppTrayIcon(window, _monitor, window.ShowOptions, async () =>
                 {
                     window.IsQuitting = true;
                     tray?.Dispose();
-                    _ = _monitor.DisposeAsync();
+                    try
+                    {
+                        await _monitor.DisposeAsync();
+                    }
+                    catch
+                    {
+                        // Shutdown must continue even if disposal reports an error.
+                    }
+
                     desktop.Shutdown();
                 });
-                window.HasTray = true;
             }
             catch (Exception exception)
             {
+                window.HasTray = false;
                 log.Write("tray unavailable: " + exception.Message);
             }
 

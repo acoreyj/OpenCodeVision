@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private readonly DiagnosticsLog _log;
     private readonly ItemsControl _itemsControl;
     private readonly ObservableCollection<object> _items = new();
+    private readonly Dictionary<string, RowViewModel> _rowCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DispatcherTimer> _flashTimers = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _elapsedTimer;
     private string _signature = "";
@@ -61,7 +62,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _options = new OptionsWindow(_monitor, _settings, _store, ApplyAlwaysOnTop);
+            _options = new OptionsWindow(_monitor, _settings, _store, ApplyAlwaysOnTop, _log.Write);
             _options.Closed += (_, _) => _options = null;
             _options.Show(this);
             _options.Activate();
@@ -175,30 +176,57 @@ public partial class MainWindow : Window
     private void Rebuild()
     {
         var rows = _monitor.Rows;
-        var signature = string.Join(
-            "\n",
-            rows.Select(row =>
-                $"{row.ServiceKey}|{row.Session.Id}|{row.State}|{row.IsOffline}|{row.Session.Title}"));
 
-        if (signature == _signature)
-        {
-            UpdateElapsed();
-            return;
-        }
-
-        _signature = signature;
-        _items.Clear();
-
-        string? lastService = null;
+        var groups = new List<List<SessionRow>>();
+        var groupIndex = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var row in rows)
         {
-            if (row.ServiceKey != lastService)
+            if (!groupIndex.TryGetValue(row.ServiceKey, out var index))
             {
-                _items.Add(new ServiceHeaderViewModel(row.ServiceName));
-                lastService = row.ServiceKey;
+                index = groups.Count;
+                groupIndex[row.ServiceKey] = index;
+                groups.Add(new List<SessionRow>());
             }
 
-            _items.Add(new RowViewModel(row));
+            groups[index].Add(row);
+        }
+
+        var ordered = groups.SelectMany(group => group).ToList();
+        var sequence = string.Join(
+            "|",
+            ordered.Select(row => row.ServiceKey + ":" + row.Session.Id));
+
+        foreach (var row in ordered)
+        {
+            if (_rowCache.TryGetValue(row.Session.Id, out var existing))
+            {
+                existing.Update(row);
+            }
+            else
+            {
+                _rowCache[row.Session.Id] = new RowViewModel(row);
+            }
+        }
+
+        var live = ordered.Select(row => row.Session.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var id in _rowCache.Keys.Where(id => !live.Contains(id)).ToList())
+        {
+            StopFlash(id);
+            _rowCache.Remove(id);
+        }
+
+        if (sequence != _signature)
+        {
+            _signature = sequence;
+            _items.Clear();
+            foreach (var group in groups)
+            {
+                _items.Add(new ServiceHeaderViewModel(group[0].ServiceName));
+                foreach (var row in group)
+                {
+                    _items.Add(_rowCache[row.Session.Id]);
+                }
+            }
         }
 
         UpdateElapsed();
@@ -207,7 +235,7 @@ public partial class MainWindow : Window
     private void UpdateElapsed()
     {
         var now = DateTimeOffset.UtcNow;
-        foreach (var row in _items.OfType<RowViewModel>())
+        foreach (var row in _rowCache.Values)
         {
             row.UpdateElapsed(now);
         }
@@ -220,12 +248,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        var row = _items
-            .OfType<RowViewModel>()
-            .FirstOrDefault(candidate =>
-                candidate.SessionId == args.SessionId && candidate.ServiceKey == args.ServiceKey);
-
-        if (row is null)
+        var row = _rowCache.GetValueOrDefault(args.SessionId);
+        if (row is null || row.ServiceKey != args.ServiceKey)
         {
             return;
         }
@@ -255,21 +279,34 @@ public partial class MainWindow : Window
             timer.Stop();
         }
 
-        var row = _items.OfType<RowViewModel>().FirstOrDefault(candidate => candidate.SessionId == sessionId);
+        var row = _rowCache.GetValueOrDefault(sessionId);
         if (row is not null)
         {
             row.FlashOpacity = 1.0;
         }
     }
 
-    private void OnRowPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnRowPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control { DataContext: RowViewModel row })
         {
             return;
         }
 
-        _monitor.MarkViewed(row.ServiceKey, row.SessionId);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        try
+        {
+            await _monitor.MarkViewedAsync(row.ServiceKey, row.SessionId);
+        }
+        catch (Exception exception)
+        {
+            _log.Write("mark viewed failed: " + exception.Message);
+        }
+
         StopFlash(row.SessionId);
 
         var service = _monitor.Services.FirstOrDefault(candidate => candidate.Key == row.ServiceKey);

@@ -4,8 +4,6 @@ A small always-on-top window that shows every opencode session on your machine
 at a glance. One row per session; the color tells you whether it is working,
 waiting for you, or blocked.
 
-![palette](#palette)
-
 ## Palette
 
 | Color | Meaning |
@@ -23,7 +21,8 @@ sessions are hidden.
 ## What it watches
 
 - The native opencode service on Windows, Linux and macOS
-  (`~/.local/state/opencode/service.json`, or `%USERPROFILE%` on Windows).
+  (`~/.local/state/opencode/service.json`, or
+  `%USERPROFILE%\.local\state\opencode\service.json` on Windows).
 - Every WSL distro that has a running opencode service, on Windows only.
 
 It discovers services on startup and every 60 seconds. The options screen
@@ -62,14 +61,25 @@ tar -xzf OpenCodeSticky-macos-arm64.tar.gz   # or -x64
 open OpenCodeSticky.app
 ```
 
-The bundle is unsigned. If Gatekeeper refuses it, run
-`xattr -dr com.apple.quarantine OpenCodeSticky.app` once.
+The bundle is unsigned. On Apple Silicon, macOS will refuse to launch an
+unsigned bundle, so ad-hoc sign it once before opening:
+
+```bash
+codesign --force --deep --sign - OpenCodeSticky.app
+open OpenCodeSticky.app
+```
+
+If Gatekeeper still refuses it, run
+`xattr -dr com.apple.quarantine OpenCodeSticky.app` once. The bundle contains
+the Avalonia, HarfBuzz and Skia native libraries next to the executable.
 
 ## Using it
 
 - Gear: options (always on top, flash on block, per-service switches, rescan).
 - Click a row: mark it viewed and open that session in your browser.
-- Close: hide to the tray. Quit from the tray menu.
+- Close: hide to the tray on Windows and macOS. On Linux, where tray support
+  varies, close quits the app and the window stays in the taskbar while open.
+- Quit: from the tray menu where a tray is available.
 - `Esc`: hide (Windows/Linux/macOS with tray) or minimize.
 
 Flashing is a visible-window effect; when hidden, the tray icon shows the most
@@ -84,8 +94,8 @@ folder:
 - Linux: `~/.config/OpenCodeSticky/`
 - macOS: `~/Library/Application Support/OpenCodeSticky/`
 
-`sticky.log` is truncated when it exceeds 1 MB. `settings.json` is written
-atomically.
+`sticky.log` is truncated at startup when it exceeds 1 MB. `settings.json` is
+written atomically.
 
 ## Building
 
@@ -105,7 +115,7 @@ are tarballs so executable bits survive.
 | --- | --- |
 | Windows 11 (x64) | Runtime-tested: native opencode 2.2.0 and Ubuntu WSL 2.1.4 both discovered; options, tray close, and stream toggle exercised. |
 | Linux (x64) | Build-tested only. The ELF x64 binary launches; this machine's WSL is headless and has no X11 stack, so Avalonia stops at the missing `libICE` before opening a window. |
-| macOS (x64 / arm64) | Packaged only. Mach-O architectures verified; not launched on macOS hardware. |
+| macOS (x64 / arm64) | Packaged only. The `.app` includes the Avalonia, HarfBuzz and Skia dylibs; Mach-O architectures verified. Not launched on macOS hardware, and the bundle is unsigned (ad-hoc sign it as shown above). |
 
 ## Limits
 

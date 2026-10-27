@@ -13,7 +13,9 @@
     <CheckBox x:Name="FlashOnBlock" Content="Flash when a session starts blocking" />
 
     <TextBlock Text="Streams" FontWeight="SemiBold" Margin="0,8,0,0" />
-    <StackPanel x:Name="Streams" Spacing="4" />
+    <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="Streams" Spacing="4" />
+    </ScrollViewer>
     <Button x:Name="RescanButton" Content="Rescan" Click="OnRescan" HorizontalAlignment="Left" />
 
     <Button Content="Close" Click="OnClose" HorizontalAlignment="Right" Margin="0,4,0,0" />

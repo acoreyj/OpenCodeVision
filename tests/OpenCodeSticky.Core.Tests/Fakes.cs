@@ -20,11 +20,18 @@ internal sealed class FakeDiscovery : IServiceDiscovery
 {
     public List<ServiceCandidate> Candidates { get; } = new();
 
+    public Exception? Throw { get; set; }
+
     public int Calls { get; private set; }
 
     public Task<IReadOnlyList<ServiceCandidate>> DiscoverAsync(CancellationToken cancellationToken)
     {
         Calls++;
+        if (Throw is not null)
+        {
+            return Task.FromException<IReadOnlyList<ServiceCandidate>>(Throw);
+        }
+
         return Task.FromResult<IReadOnlyList<ServiceCandidate>>(Candidates.ToList());
     }
 }
