@@ -65,6 +65,22 @@ wsl.exe -d Ubuntu -e cat ~/.local/state/opencode/service.json
   `wsl.exe -d Ubuntu -e hostname -I`; the monitor retries it automatically.
 - A stopped distro shows as offline; start it and rescan.
 
+## A session open in the desktop app is missing
+
+The OpenCode desktop app (1.x) runs its own private sidecar server with a
+per-launch random password. Its sessions are separate from the shared service
+the CLI uses, so the sticky cannot read them. Confirm it:
+
+- Desktop window state marks the tab as `"server": "sidecar"`.
+- The session returns `404` from the background service:
+  `GET /api/session/{id}` on `127.0.0.1:28894`.
+- The sidecar port (shown in the app's `main.log` as
+  `spawning sidecar { url: ... }`) rejects every request with `401`.
+
+There is no supported external entry point today. See
+[the upstream request](upstream-desktop-sidecar.md). Sessions started through
+the CLI/background service do appear in the sticky.
+
 ## Tray icon missing (Linux)
 
 Avalonia's tray needs a StatusNotifier/AppIndicator host. Without one:

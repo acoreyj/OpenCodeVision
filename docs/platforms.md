@@ -10,8 +10,14 @@
 - **Packaging**: self-contained single `.exe` in a zip. Unsigned, so SmartScreen
   may prompt on first run.
 
-## WSL (Windows only)
+## Desktop app (1.x)
 
+The desktop app runs its own sidecar with a per-launch random password and does
+not publish a service file. Its own sessions are not readable by this app; see
+[the upstream request](upstream-desktop-sidecar.md). Sessions created through
+the shared background service remain visible everywhere.
+
+## WSL (Windows only)
 - Distros are listed with `wsl.exe -l -q`, which prints UTF-16LE without a BOM.
 - Each distro's service file is read with
   `wsl.exe -d <distro> -e sh -lc 'cat "$HOME/.local/state/opencode/service.json"'`.

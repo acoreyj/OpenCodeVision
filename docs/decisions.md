@@ -84,6 +84,17 @@ unreachable.
 **Cost:** an extra command before first launch on Apple Silicon; Gatekeeper still
 needs quarantine removal in some setups.
 
+## Desktop app sidecar is not monitored
+
+**Decision:** monitor the shared local service only; do not scrape the desktop
+app's UI state or capture its sidecar credential.
+**Why:** the desktop app (1.x) generates a per-launch password and passes it
+in memory; reading UI files would give titles but no live state, and a
+debug-port bridge would weaken local security for a fragile integration.
+**Cost:** desktop-only sessions are invisible until upstream exposes a service
+file or reuses the shared service. The limitation is documented and an upstream
+issue is drafted in [upstream-desktop-sidecar.md](upstream-desktop-sidecar.md).
+
 ## No single-instance guard, no remote services, no auto-update
 
 **Decision:** v1 keeps these out.

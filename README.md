@@ -135,5 +135,8 @@ are tarballs so executable bits survive.
 
 - No desktop notifications or sounds. Color and optional flashing only.
 - No remote machines; local services and local WSL distros only.
+- The OpenCode desktop app (1.x) runs a private sidecar with a per-launch
+  password. Sessions that live only in that sidecar are not visible to the
+  sticky; see [the upstream request](docs/upstream-desktop-sidecar.md).
 - Always-on-top and tray behavior depend on the Linux desktop environment.
 - The app reads opencode's local API; it never edits sessions or the database.

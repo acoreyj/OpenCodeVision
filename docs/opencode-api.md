@@ -104,6 +104,24 @@ depend on a fixed list:
   permission counts.
 - Malformed frames are skipped without terminating the stream.
 
+## The desktop app sidecar
+
+The Windows/macOS/Linux OpenCode desktop app (1.x) is a separate client. On
+launch it forks an in-process sidecar server on a random loopback port,
+authenticated with a `randomUUID()` password sent over Electron IPC. It does
+not write a service file, and its sessions are not in the shared background
+service:
+
+- desktop tabs carry `"server": "sidecar"`,
+- those session IDs return 404 from `GET /api/session/{id}` on the shared
+  service,
+- the sidecar rejects unauthenticated requests with 401.
+
+The sticky therefore reads the shared service only. Sessions created through
+the CLI or against the background service are visible even if the desktop app
+has opened them. The gap and the proposed upstream fix are documented in
+[upstream-desktop-sidecar.md](upstream-desktop-sidecar.md).
+
 ## Version drift
 
 This app was developed against native opencode 2.2.0 and WSL 2.1.4. The client

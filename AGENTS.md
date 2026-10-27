@@ -55,6 +55,8 @@ Packaging needs WSL for `tar`/`wslpath`.
   state, concurrency rules, and the manual UI checklist.
 - Read [docs/decisions.md](docs/decisions.md) for the rationale and costs behind
   the current design.
+- Read [docs/upstream-desktop-sidecar.md](docs/upstream-desktop-sidecar.md)
+  before adding desktop-app session support; its sidecar is private by design.
 
 ## Verifying
 
