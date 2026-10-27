@@ -109,6 +109,20 @@ powershell -File scripts/package.ps1
 `artifacts/`. Cross-publishing works from Windows; the Linux and macOS archives
 are tarballs so executable bits survive.
 
+## Documentation
+
+- [Documentation index](docs/README.md) — every guide, with when to read it.
+- [Architecture](docs/architecture.md) — modules, data flow, threading.
+- [State model](docs/state-model.md) — colors, thresholds, blocked rules.
+- [opencode API](docs/opencode-api.md) — endpoints, payloads, event stream.
+- [Configuration](docs/configuration.md) — settings schema and file paths.
+- [Platforms](docs/platforms.md) — Windows, WSL, Linux, macOS differences.
+- [Building](docs/building.md) — build, test, publish and package.
+- [Troubleshooting](docs/troubleshooting.md) — no rows, offline services, tray.
+- [Development](docs/development.md) — TDD workflow and change checklists.
+- [Decisions](docs/decisions.md) — why the app works this way, and the costs.
+- [AGENTS.md](AGENTS.md) — entry point for coding agents.
+
 ## Verified
 
 | Platform | Status |
