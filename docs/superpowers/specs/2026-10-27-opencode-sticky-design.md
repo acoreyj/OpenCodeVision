@@ -15,8 +15,9 @@ answer needs no reading.
 
 ## Goals
 
-- Show every top-level opencode session from this PC and its WSL distros in
-  one compact window.
+- Show every top-level opencode session from every opencode service on the
+  machine — native on Windows, Linux or macOS, plus WSL distros on Windows —
+  in one compact window.
 - Show, per session: project folder, title, state color, time in current state.
 - Update live from opencode's event stream; no scraping, no plugins, no
   changes to opencode.
@@ -46,7 +47,7 @@ answer needs no reading.
 ## Decisions made by the user
 
 - Single compact window, one row per session — not one sticky per session.
-- Windows only; .NET is acceptable.
+- Windows, Linux and macOS; .NET with Avalonia for the UI.
 - Palette: grey idle/finished, green working, amber waiting for approval,
   blue waiting for your next message, red errored.
 - Options screen contains an always-on-top toggle, a flash toggle, and
@@ -146,9 +147,9 @@ window hides to tray rather than quitting.
 
 Verified on this machine:
 
-- Native: `%USERPROFILE%\.local\state\opencode\service.json` contains
-  `{id, version, url, pid, password}`; the service answered on
-  `http://127.0.0.1:28894`.
+- Native: `%USERPROFILE%\.local\state\opencode\service.json` on Windows, and
+  `~/.local/state/opencode/service.json` on Linux and macOS; the native
+  service answered on `http://127.0.0.1:28894` here.
 - WSL: each distro keeps its own `~/.local/state/opencode/service.json`
   (Ubuntu answered on `http://127.0.0.1:49374`, reachable from Windows via
   WSL2 localhost forwarding).
@@ -166,7 +167,8 @@ Verified on this machine:
 Discovery loop:
 
 1. Read the native service file, if present.
-2. Run `wsl.exe -l -q` for distro names; for each, read its service file with
+2. On Windows only, run `wsl.exe -l -q` for distro names; for each, read its
+   service file with
    `wsl.exe -d <distro> -e sh -lc 'cat "$HOME/.local/state/opencode/service.json"'`.
 3. Validate each candidate with `GET /api/info` using the stored password.
 4. Re-scan every 60 seconds and on demand; keep previously known services
@@ -199,18 +201,23 @@ v1; low cost if trivial.
 
 ## Technical shape
 
-- .NET 8 WPF, `net8.0-windows`, self-contained `win-x64`, single-file publish.
+- .NET 8 with Avalonia 11.3.22 for the UI, `net8.0`, cross-platform.
 - One `HttpClient` per service with Basic auth preconfigured.
 - One background task per enabled service: SSE reader plus a periodic
   full-refresh (10 s) safety net. Events update an in-memory session map;
   the UI is updated on the dispatcher only when something changed.
-- Service discovery and status derivation are pure, testable classes.
-- Tray icon via `System.Windows.Forms.NotifyIcon` (part of the Windows Desktop
-  SDK; no NuGet dependency).
-- Settings: `%APPDATA%\OpenCodeSticky\settings.json` — enabled services,
-  window position, always-on-top, flash. Written atomically; corrupt file falls
-  back to defaults.
-- No third-party packages required.
+- Service discovery and status derivation are pure, testable classes. WSL
+  probing is enabled only on Windows.
+- Tray icon via Avalonia `TrayIcon`; where a desktop environment does not
+  support one, the app keeps running without it.
+- Settings: the platform's application-data folder
+  (`%APPDATA%\OpenCodeSticky\settings.json`, `~/.config/OpenCodeSticky/`,
+  `~/Library/Application Support/OpenCodeSticky/`) — enabled services, window
+  position, always-on-top, flash. Written atomically; corrupt file falls back
+  to defaults.
+- One UI dependency: Avalonia (MIT). No other third-party packages.
+- Published self-contained single-file binaries for `win-x64`, `linux-x64`,
+  `osx-x64` and `osx-arm64`, with a `.app` bundle for macOS.
 
 ## Calls made while refining the design
 
@@ -241,7 +248,14 @@ revisit:
    switching it back on restores them without restarting the app.
 8. The app uses negligible CPU while all sessions are idle.
 9. Closing the window hides it to the tray; Quit exits cleanly.
-10. The published single-file `.exe` runs on this machine with no install.
+10. The published Windows single-file `.exe` runs on this machine with no
+    install.
+11. The Linux binary launches and shows sessions when a display is available
+    (WSLg or X11); it degrades to a clear error without one.
+12. A macOS `.app` bundle is produced with the expected structure and
+    executable; runtime verification happens on hardware where available.
+13. All four published artifacts are built from the same version and listed in
+    the README.
 
 ## Risks and open items
 
@@ -256,3 +270,7 @@ revisit:
   machine, and cover the mapping with unit tests.
 - **Click target** — web UI session URL pattern is assumed. Mitigation:
   confirm during build; fall back to the service root.
+- **Cross-platform UI** — Avalonia tray support and always-on-top vary by
+  Linux desktop (especially Wayland); macOS is not available on this machine.
+  Mitigation: degrade gracefully, keep the window usable without a tray, and
+  state what was verified where in the README.

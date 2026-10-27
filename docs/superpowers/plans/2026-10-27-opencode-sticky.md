@@ -2,27 +2,27 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a single-window Windows tray app that shows every top-level opencode session, native and WSL, with a live state color, always-on-top and flash options, and per-service toggles.
+**Goal:** Build a single-window desktop tray app for Windows, Linux and macOS that shows every top-level opencode session, native and WSL, with a live state color, always-on-top and flash options, and per-service toggles.
 
-**Architecture:** A UI-free `OpenCodeSticky.Core` class library owns discovery, HTTP/SSE, status derivation, settings and the session monitor. A thin WPF app (`OpenCodeSticky.App`) owns the window, tray icon and options dialog. Core is tested with xUnit; the UI is verified by running it against the live services on this machine and reading the diagnostics log.
+**Architecture:** A UI-free `OpenCodeSticky.Core` class library owns discovery, HTTP/SSE, status derivation, settings and the session monitor. A thin Avalonia app (`OpenCodeSticky.App`) owns the window, tray icon and options dialog. Core is tested with xUnit; the UI is verified by running it against the live services and reading the diagnostics log.
 
-**Tech Stack:** .NET 8, WPF, System.Windows.Forms (tray only), System.Text.Json, xUnit. No third-party NuGet packages in shipped projects.
+**Tech Stack:** .NET 8, Avalonia 11.3.22, System.Text.Json, xUnit. No third-party NuGet packages besides Avalonia.
 
 **Spec:** `docs/superpowers/specs/2026-10-27-opencode-sticky-design.md`
 
 ## Global Constraints
 
-- Target `net8.0` for Core and tests; `net8.0-windows` for the app. Publish `win-x64`.
-- No third-party packages in `OpenCodeSticky.Core` or `OpenCodeSticky.App`.
+- Target `net8.0` for Core, tests and the Avalonia app. Publish `win-x64`, `linux-x64`, `osx-x64` and `osx-arm64`.
+- No third-party packages in `OpenCodeSticky.Core`; only Avalonia 11.3.22 in the app.
 - Auth is HTTP Basic: username `opencode`, password from the service file's `password`.
-- Native service file: `%USERPROFILE%\.local\state\opencode\service.json`.
-- WSL service file: `~/.local/state/opencode/service.json`, read via `wsl.exe`.
+- Native service file: `%USERPROFILE%\.local\state\opencode\service.json` on Windows, `~/.local/state/opencode/service.json` on Linux/macOS.
+- WSL is probed only on Windows; `ServiceDiscovery` accepts a null gateway elsewhere.
 - `wsl.exe -l -q` prints UTF-16LE without a BOM.
 - Only top-level sessions (`parentID` absent).
 - Recency window: 30 minutes. Blue expires from "blocked" after 24 hours. Offline rows linger 5 minutes.
 - Discovery rescan: 60 s. Full refresh: 10 s. SSE-triggered refresh: 300 ms debounce. Working grace: 20 s. Idle tolerance: 2 s.
 - Palette: grey `#8A8A8A` idle, green `#3FB950` working, amber `#D29922` approval, blue `#388BFD` waiting, red `#F85149` errored.
-- Settings file: `%APPDATA%\OpenCodeSticky\settings.json`.
+- Settings file: `<app-data>/OpenCodeSticky/settings.json` (`%APPDATA%` on Windows, `~/.config` on Linux, `~/Library/Application Support` on macOS).
 
 ## Review Focus
 
@@ -185,6 +185,7 @@ git commit -m "feat(core): session models and status evaluation"
 - Produces: `IWslGateway.ListDistrosAsync(CancellationToken) -> Task<IReadOnlyList<string>>`, `ReadServiceFileAsync(string distro, CancellationToken) -> Task<string?>`, `GetDistroAddressAsync(string distro, CancellationToken) -> Task<string?>`
 - Produces: `ServiceDiscovery(IWslGateway wsl, string nativeStatePath)`, `DiscoverAsync(CancellationToken) -> Task<IReadOnlyList<ServiceCandidate>>`
 - Produces: `WslGateway.DecodeDistroList(byte[] bytes) -> IReadOnlyList<string>` (static, testable)
+- Amendment (multi-OS): `IWslGateway` is optional (`null` skips WSL), and the native display name follows the host OS (Windows/Linux/macOS).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -430,78 +431,119 @@ git commit -m "feat(core): session monitor with discovery, polling and SSE"
 
 ---
 
-### Task 6: WPF shell
+### Task 6: Avalonia shell
 
 **Files:**
 - Create: `src/OpenCodeSticky.App/OpenCodeSticky.App.csproj`
-- Create: `src/OpenCodeSticky.App/App.xaml`, `App.xaml.cs`
-- Create: `src/OpenCodeSticky.App/MainWindow.xaml`, `MainWindow.xaml.cs`
-- Create: `src/OpenCodeSticky.App/RowViewModel.cs`
+- Create: `src/OpenCodeSticky.App/Program.cs`
+- Create: `src/OpenCodeSticky.App/App.axaml`, `App.axaml.cs`
+- Create: `src/OpenCodeSticky.App/MainWindow.axaml`, `MainWindow.axaml.cs`
+- Create: `src/OpenCodeSticky.App/ViewModels/RowViewModel.cs`
+- Create: `src/OpenCodeSticky.App/ViewModels/ServiceHeaderViewModel.cs`
 - Create: `src/OpenCodeSticky.App/DiagnosticsLog.cs`
 - Modify: `OpenCodeSticky.sln` (add the app project, reference Core)
 
 **Interfaces:**
-- Consumes: `SessionMonitor.Rows`, `Services`, `Changed`, `BlockedStarted`
+- Consumes: `SessionMonitor.Rows`, `Services`, `Changed`, `BlockedStarted`; `Settings`, `SettingsStore`
 - Produces: `MainWindow(SessionMonitor monitor, Settings settings, SettingsStore store, DiagnosticsLog log)`
-- Produces: `diagnostics log` path `%APPDATA%\OpenCodeSticky\sticky.log`
+- Produces: `RowViewModel` with `Project`, `Title`, `Elapsed`, `StateBrush`, `FlashOpacity`, `IsOffline`
+- Produces: diagnostics log at `<app-data>/OpenCodeSticky/sticky.log`
 
-- [ ] **Step 1: Create the project and the window**
+- [ ] **Step 1: Create the project**
+
+Create the csproj by hand (no template install needed):
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>OpenCodeSticky</AssemblyName>
+    <RootNamespace>OpenCodeSticky.App</RootNamespace>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\OpenCodeSticky.Core\OpenCodeSticky.Core.csproj" />
+  </ItemGroup>
+</Project>
+```
 
 ```powershell
-dotnet new wpf -n OpenCodeSticky.App -o src/OpenCodeSticky.App -f net8.0
 dotnet sln add src/OpenCodeSticky.App
 dotnet add src/OpenCodeSticky.App reference src/OpenCodeSticky.Core
 ```
 
-Set `UseWindowsForms=true` and `ApplicationManifest` left default; `OutputType=WinExe`, `AssemblyName=OpenCodeSticky`.
+- [ ] **Step 2: App bootstrap**
 
-Window requirements:
+`Program.cs`: `[STAThread] Main` calls `BuildAvaloniaApp().StartWithClassicDesktopLifetime(args)`; `BuildAvaloniaApp` = `AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace()`.
 
-- 320 px wide, `SizeToContent="Height"`, `ResizeMode="CanMinimize"`, `MaxHeight` set on load to 60% of the working area.
-- Header: title `opencode` and a minimize button; `Esc` hides the window. The gear is added in Task 7.
-- A `ListBox` bound to a `CollectionViewSource` grouped by `ServiceName`, with a group header template showing the service name.
-- Row template: 4 px state-colored bar, project folder (tail of `Directory`), title with `TextTrimming="CharacterEllipsis"`, elapsed text, `ToolTip` showing full title and path. Offline rows at 40% opacity with an `offline` suffix.
-- `Topmost = settings.AlwaysOnTop` on load. Restore `Left`/`Top` from settings, clamped to `SystemParameters.VirtualScreen*`; default to the top-right of the primary working area.
-- Clicking a row calls `monitor.MarkViewed(...)` and opens `new Uri(serviceUrl, "/session/" + id)` with `Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })`; the service URL comes from `monitor.Services` by key. If opening the session URL throws, open the service root instead. Desktop-app deep links are out of scope; the browser is the target.
-- `Changed` rebuilds the grouped view model collection without replacing the collection instance (avoid flicker). Update elapsed text on a 1 s `DispatcherTimer`.
-- `BlockedStarted` starts a 6 s `DispatcherTimer` that toggles `IsFlashing` on that row every 500 ms; clicking the row stops it early. Only runs when `settings.FlashOnBlock` is true and the window `IsVisible`.
-- Hiding the window saves `Left`/`Top` to settings.
+`App.axaml`: `RequestedThemeVariant="Dark"`, `FluentTheme`, and resources:
 
-- [ ] **Step 2: Wire startup and diagnostics**
+```xml
+<SolidColorBrush x:Key="WindowBackground" Color="#1B1B1B" />
+<SolidColorBrush x:Key="PanelBackground" Color="#232323" />
+<SolidColorBrush x:Key="MutedText" Color="#8B8B8B" />
+<SolidColorBrush x:Key="StateIdle" Color="#8A8A8A" />
+<SolidColorBrush x:Key="StateWorking" Color="#3FB950" />
+<SolidColorBrush x:Key="StateApproval" Color="#D29922" />
+<SolidColorBrush x:Key="StateWaiting" Color="#388BFD" />
+<SolidColorBrush x:Key="StateErrored" Color="#F85149" />
+```
 
-`App.xaml.cs` on startup:
+`App.axaml.cs` startup:
 
-1. Create `SettingsStore(Path.Combine(Environment.GetFolderPath(ApplicationData), "OpenCodeSticky", "settings.json"))` and load.
-2. Create `DiagnosticsLog` at the same folder; truncate to empty when it exceeds 1 MB at startup; `Write(string)` appends `"HH:mm:ss.fff <line>"`.
-3. Create `WslGateway`, `ServiceDiscovery(wsl, Path.Combine(profile, ".local", "state", "opencode", "service.json"))`.
-4. Create `SessionMonitor(discovery, d => new OpenCodeClient(d.Url, d.Password), settings, TimeProvider.System, log.Write)`.
-5. Start the monitor, show `MainWindow`, and log one line per service found and per state change.
+1. `var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpenCodeSticky");`
+2. Settings store at `root/settings.json`; diagnostics log at `root/sticky.log`.
+3. Native service file: `Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state", "opencode", "service.json")`.
+4. `IWslGateway? wsl = OperatingSystem.IsWindows() ? new WslGateway() : null;`
+5. `new ServiceDiscovery(wsl, nativePath)` and `new SessionMonitor(discovery, d => new OpenCodeClient(d.Url, d.Password), settings, TimeProvider.System, log.Write)`.
+6. Set `desktop.MainWindow` to the window, then `_ = monitor.StartAsync(CancellationToken.None)` (fire and forget; errors are logged by the monitor's service status).
 
-`Fakes` and Core tests must stay untouched.
+- [ ] **Step 3: Main window**
 
-- [ ] **Step 3: Build**
+`MainWindow.axaml`: `Width="320"`, `MinWidth="320"`, `MaxWidth="320"`, `CanResize="False"`, `SizeToContent="Height"`, `Background="{StaticResource WindowBackground}"`, `ShowInTaskbar="True"`, `Title="opencode"`.
 
-Run: `dotnet build OpenCodeSticky.sln -c Debug`
-Expected: build succeeds with no new warnings. Fix any binding-related build issues rather than suppressing them.
+Layout: a header row (title + minimize button; gear added in Task 7), then `ScrollViewer` wrapping an `ItemsControl` named `Items`. The window's `MaxHeight` is set in code on `Opened` to 60% of `Screens.Primary.WorkingArea.Height / RenderScaling`.
 
-- [ ] **Step 4: Run against the live services and verify the data path**
+`ItemsControl.ItemTemplate` is not used; instead declare two `DataTemplate`s in `Window.Resources`:
 
-Prerequisites: opencode running natively. Run:
+- `ServiceHeaderViewModel`: small caps service name, top margin 8, muted color.
+- `RowViewModel`: `Border` with `PointerPressed="OnRowPressed"`, grid of 4 px bar (`Background="{Binding StateBrush}" Opacity="{Binding FlashOpacity}"`), project + title, elapsed. Title `TextTrimming="CharacterEllipsis"`, `ToolTip.Tip` = full title + path. When `IsOffline`, whole border opacity 0.4.
+
+Code-behind:
+
+- Constructor stores dependencies and subscribes `monitor.Changed` (marshalled with `Dispatcher.UIThread.Post(Rebuild)`), `monitor.BlockedStarted`, and a 1 s `DispatcherTimer` that refreshes `Elapsed` on every row.
+- `Rebuild()` walks `monitor.Rows` in order, emits a header whenever `ServiceKey` changes, then a `RowViewModel`. Keep one `ObservableCollection<object> Items` and update it in place.
+- `OnRowPressed` marks the row viewed, stops its flash, and launches `new Uri(serviceUrl + "/session/" + id)` via `TopLevel.GetTopLevel(this)!.Launcher.LaunchUriAsync`. Resolve the service URL from `monitor.Services` by key; on failure open the service root.
+- `BlockedStarted` looks up the row and, when `settings.FlashOnBlock && IsVisible`, toggles `FlashOpacity` between 1.0 and 0.45 every 500 ms for 6 s.
+- Restore `Position` from settings, clamped to `Screens.All` working areas; default top-right of the primary screen. Save `Position` on `Closing`.
+- `Topmost = settings.AlwaysOnTop`.
+- `Esc` hides the window (Task 7 turns this into hide-to-tray; until then it closes only when the app is quit).
+
+- [ ] **Step 4: Build and run against the live services**
 
 ```powershell
+dotnet build OpenCodeSticky.sln -c Debug
 Start-Process dotnet -ArgumentList 'run --project src/OpenCodeSticky.App'
 Start-Sleep -Seconds 12
 Get-Content "$env:APPDATA\OpenCodeSticky\sticky.log" -Tail 20
 Get-Process OpenCodeSticky | Select-Object MainWindowTitle, Responding
 ```
 
-Expected: `sticky.log` lists `native` and at least one row; the process is responding and the window title is `opencode`. Capture the log tail in the task notes.
+Expected: build succeeds; log lists the discovered services and recent rows; the process is responding with title `opencode`.
 
 - [ ] **Step 5: Commit**
 
 ```powershell
 git add src OpenCodeSticky.sln
-git commit -m "feat(app): always-on-top session window with live rows"
+git commit -m "feat(app): cross-platform Avalonia session window"
 ```
 
 ---
@@ -509,99 +551,120 @@ git commit -m "feat(app): always-on-top session window with live rows"
 ### Task 7: Options and tray
 
 **Files:**
-- Create: `src/OpenCodeSticky.App/OptionsWindow.xaml`, `OptionsWindow.xaml.cs`
-- Create: `src/OpenCodeSticky.App/TrayIcon.cs`
-- Modify: `src/OpenCodeSticky.App/MainWindow.xaml`, `MainWindow.xaml.cs`
-- Modify: `src/OpenCodeSticky.App/App.xaml.cs`
+- Create: `src/OpenCodeSticky.App/OptionsWindow.axaml`, `OptionsWindow.axaml.cs`
+- Create: `src/OpenCodeSticky.App/AppTrayIcon.cs`
+- Create: `src/OpenCodeSticky.App/Assets/tray-*.png` (five state icons)
+- Create: `packaging/make-icons.ps1`
+- Modify: `src/OpenCodeSticky.App/App.axaml` (AvaloniaResource), `App.axaml.cs`, `MainWindow.axaml`, `MainWindow.axaml.cs`
 
 **Interfaces:**
 - Consumes: `SessionMonitor.Services`, `SetServiceEnabled`, `RescanAsync`; `Settings`, `SettingsStore`
 - Produces: `OptionsWindow(SessionMonitor monitor, Settings settings, SettingsStore store, Action applyAlwaysOnTop)`
-- Produces: `TrayIcon(Window window, SessionMonitor monitor, Action openOptions, Action quit)` with `UpdateBadge(IReadOnlyList<SessionRow> rows)`
+- Produces: `AppTrayIcon(MainWindow window, SessionMonitor monitor, Action openOptions, Action quit)` with `Update(IReadOnlyList<SessionRow> rows)`
 
-- [ ] **Step 1: Build the options dialog**
+- [ ] **Step 1: Generate state icons**
 
-- `WindowStartupLocation="CenterOwner"`, width 380, size to content.
-- Add the gear button to the `MainWindow` header; it opens `OptionsWindow` with `ShowDialog()` (single instance; if already open, activate it).
-- General: `CheckBox` "Always on top" bound to `settings.AlwaysOnTop`; `CheckBox` "Flash when a session starts blocking" bound to `settings.FlashOnBlock`. Both save immediately on change and call the apply callback for topmost.
-- Streams: `ItemsControl` over `monitor.Services`, each row showing display name, `v{Version}` (or `unknown`), `online`/`offline`, and a `CheckBox` bound to a per-item wrapper. Toggling calls `monitor.SetServiceEnabled(key, value)`, `settings.SetServiceEnabled`, and saves.
-- `Rescan` button calls `monitor.RescanAsync`, shows `Scanning…` while running, and refreshes the list from `monitor.Services`.
-- Close button dismisses; no other effects.
+`packaging/make-icons.ps1` uses `System.Drawing` to draw a 64×64 dark rounded square with a centred dot, once per state color (`idle`, `working`, `approval`, `waiting`, `errored`), writing `src/OpenCodeSticky.App/Assets/tray-<state>.png`. Run it once and commit the PNGs. Add to the csproj:
 
-- [ ] **Step 2: Build the tray icon**
+```xml
+<ItemGroup>
+  <AvaloniaResource Include="Assets\**" />
+</ItemGroup>
+```
 
-- `NotifyIcon` with `Text = "opencode"`, context menu: Show/Hide, Options, Quit; double-click toggles the window.
-- Icon is generated at runtime: 16×16 (and 32×32) bitmap, dark rounded square `#1F1F1F`, center dot in the most urgent state color (amber > blue > red > green > grey). Rebuild only when the urgency color changes.
-- `UpdateBadge` takes the current rows, computes the worst state among online rows, and rebuilds the icon if the color changed.
-- Closing the window hides it (`e.Cancel = true; Hide();`) and updates the tray tooltip; Quit cancels the monitor and shuts down.
-- Window `StateChanged`: minimizing keeps the taskbar button (do not hide).
-- In `App.xaml.cs`, create the tray after `MainWindow`, wire `openOptions` to the same dialog used by the gear, and wire `quit` to cancel the monitor, save settings and `Shutdown()`.
+- [ ] **Step 2: Options dialog**
 
-- [ ] **Step 3: Verify by hand**
+Avalonia `Window`, width 380, `SizeToContent="Height"`, `WindowStartupLocation="CenterOwner"`, dark panel background.
 
-Run the app. Check:
+- CheckBox "Always on top" (initial value `settings.AlwaysOnTop`) — on change: update settings, save, call `applyAlwaysOnTop`.
+- CheckBox "Flash when a session starts blocking" (initial `settings.FlashOnBlock`) — on change: update settings, save.
+- Streams: `ItemsControl` over `monitor.Services`, each with a CheckBox (checked = `Enabled`), display name, `v{Version}` or `unknown`, and `online`/`offline`. Toggling calls `monitor.SetServiceEnabled(key, value)`, `settings.SetServiceEnabled(key, value)`, save.
+- `Rescan` button calls `monitor.RescanAsync`, disables itself while running, then reloads the list.
+- Gear button in the main header opens the dialog with `ShowDialog(this)`; keep one instance.
 
-1. Gear opens options; both toggles change behavior immediately.
-2. Turning `native` off removes its rows within one refresh; turning it back on restores them.
-3. `wsl:Ubuntu` appears and can be toggled independently.
+- [ ] **Step 3: Tray**
+
+`AppTrayIcon` creates `new TrayIcon { ToolTipText = "opencode", Icon = ... }`, attaches it with `TrayIcon.SetIcons(Application.Current!, new TrayIcons { icon })`, and builds a `NativeMenu` with Show/Hide, Options and Quit. Double-click toggles the window. Catch platform exceptions (tray unsupported on some Linux desktops), log, and continue without a tray.
+
+- `Update(rows)`: worst state among online rows (approval > waiting > errored > working > idle) selects `tray-<state>.png`; rebuild the `WindowIcon` only when the state changes.
+- Subscribe to `monitor.Changed` to call `Update`.
+- Close-to-tray: in `MainWindow.Closing`, if a tray exists and the app is not quitting, cancel and `Hide()`; Quit sets a flag, disposes the tray, cancels the monitor and calls `Shutdown()`.
+- Minimizing keeps the taskbar button.
+
+- [ ] **Step 4: Verify by hand**
+
+1. Gear opens options; both toggles change behaviour immediately.
+2. Turning `native` off removes its rows within a refresh; turning it on restores them.
+3. Each WSL distro is listed separately on Windows.
 4. Always-on-top keeps the window above a maximized browser.
-5. Closing hides to tray; tray double-click shows it; Quit exits.
-6. Tray dot turns amber or blue when a session blocks.
+5. Closing hides to the tray; the tray double-click shows it; Quit exits.
+6. The tray dot turns amber or blue when a session blocks.
 
-Record the outcome in the task notes; if a check fails, fix it before committing.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```powershell
-git add src
-git commit -m "feat(app): options dialog and tray icon"
+git add src packaging
+git commit -m "feat(app): options dialog and tray for all platforms"
 ```
 
 ---
 
-### Task 8: Publish and end-to-end check
+### Task 8: Publish for Windows, Linux and macOS
 
 **Files:**
 - Create: `README.md`
+- Create: `packaging/macos/Info.plist`
+- Create: `packaging/linux/opencode-sticky.desktop`
 - Modify: `src/OpenCodeSticky.App/OpenCodeSticky.App.csproj` (publish properties)
+- Create: `scripts/package.ps1`
 
 **Interfaces:**
-- Produces: `publish/OpenCodeSticky.exe`, single file, self-contained `win-x64`
+- Produces: `artifacts/OpenCodeSticky-win-x64.zip`
+- Produces: `artifacts/OpenCodeSticky-linux-x64.tar.gz`
+- Produces: `artifacts/OpenCodeSticky-macos-x64.tar.gz`, `artifacts/OpenCodeSticky-macos-arm64.tar.gz` (each containing `OpenCodeSticky.app`)
 
-- [ ] **Step 1: Add publish properties and publish**
-
-In the app project:
+- [ ] **Step 1: Publish properties**
 
 ```xml
 <PublishSingleFile>true</PublishSingleFile>
 <SelfContained>true</SelfContained>
-<RuntimeIdentifier>win-x64</RuntimeIdentifier>
 <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 ```
 
-Run:
+- [ ] **Step 2: Publish each runtime**
 
 ```powershell
-dotnet publish src/OpenCodeSticky.App -c Release -o publish
-Get-ChildItem publish
+foreach ($rid in @('win-x64','linux-x64','osx-x64','osx-arm64')) {
+  dotnet publish src/OpenCodeSticky.App -c Release -r $rid --self-contained true -o "artifacts/$rid"
+}
 ```
 
-Expected: exactly `OpenCodeSticky.exe` (plus any `.pdb` you choose to delete). Record the file size.
+Expected: four directories, each with a single executable named `OpenCodeSticky` (`.exe` on Windows). Cross-publishing from Windows is supported by Avalonia; failures must be fixed, not skipped.
 
-- [ ] **Step 2: Smoke-test the artifact**
+- [ ] **Step 3: Package**
 
-Run `publish\OpenCodeSticky.exe`; wait 12 s; check `%APPDATA%\OpenCodeSticky\sticky.log` shows discovery and rows; confirm the process responds; quit from the tray.
+`scripts/package.ps1`:
 
-- [ ] **Step 3: Write the README**
+- Windows: zip `artifacts/win-x64/*` to `artifacts/OpenCodeSticky-win-x64.zip`.
+- Linux: copy `opencode-sticky.desktop` next to the binary, then tar.gz it via WSL (`wsl -e bash -lc 'chmod +x ... && tar -czf ...'`) so the executable bit survives. The desktop entry runs `OpenCodeSticky` and has `Terminal=false`, `Categories=Development;`.
+- macOS: stage `OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky`, `Contents/Info.plist` (identifier `ai.opencode.sticky`, executable `OpenCodeSticky`, `LSMinimumSystemVersion` 11.0, `NSHighResolutionCapable` true), and `Contents/Resources/app.png`. Tar.gz each architecture via WSL with `chmod +x` on the executable.
 
-Include: what it does, the palette, how to run, where settings and logs live, that it requires opencode to have run at least once, and the known limits (local and WSL only, no notifications).
+- [ ] **Step 4: Smoke-test what this machine can run**
 
-- [ ] **Step 4: Commit**
+- Windows: run `artifacts/win-x64/OpenCodeSticky.exe`, wait 12 s, check the log shows services and rows, then quit from the tray.
+- Linux: from WSL Ubuntu, try `./OpenCodeSticky` with WSLg; if a display is unavailable, record that the binary starts but cannot open a window, and do not claim runtime verification.
+- macOS: verify the `.app` tree and that the binary is the expected architecture (`file` in WSL). Runtime verification is not possible here and must be stated as such in the README.
+
+- [ ] **Step 5: README**
+
+What it does, palette, how to run each artifact, where settings and logs live on each OS, the opencode prerequisite, and a short "verified on" table (Windows runtime-tested; Linux build-tested; macOS packaged, not runtime-tested).
+
+- [ ] **Step 6: Commit**
 
 ```powershell
-git add README.md src
-git commit -m "chore: single-file publish and README"
+git add README.md packaging scripts src
+git commit -m "chore: publish Windows, Linux and macOS artifacts"
 ```
 
 ---
@@ -609,6 +672,7 @@ git commit -m "chore: single-file publish and README"
 ## Execution notes
 
 - Run `dotnet test` before every commit; UI tasks additionally need the live-app checks in their own steps.
-- The live machine currently has two local services: native 2.2.0 and Ubuntu 2.1.4. Both must appear without configuration.
+- The live machine has two local services: native 2.2.0 and Ubuntu WSL 2.1.4. Both must appear on Windows without configuration. On Linux and macOS only the native service exists; WSL probing is Windows-only.
 - If the permission event or the session state semantics behave differently from the evaluator's table, adjust `StatusEvaluator` and its tests first, then the monitor. Do not special-case in the UI.
 - Keep `StatusEvaluator` free of HTTP and time access so it stays fully unit-tested.
+- Avalonia version is pinned to 11.3.22 in the plan; do not float it.
