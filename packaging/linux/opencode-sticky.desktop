@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=OpenCode Sticky
+Comment=Live session status for opencode
+Exec=OpenCodeSticky
+Terminal=false
+Categories=Development;
