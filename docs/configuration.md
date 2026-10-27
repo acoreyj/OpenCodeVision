@@ -7,7 +7,7 @@ dialog; the app writes a small JSON file.
 
 | What | Windows | Linux | macOS |
 | --- | --- | --- | --- |
-| Settings | `%APPDATA%\OpenCodeSticky\settings.json` | `~/.config/OpenCodeSticky/settings.json` | `~/Library/Application Support/OpenCodeSticky/settings.json` |
+| Settings | `%APPDATA%\OpenCodeVision\settings.json` | `~/.config/OpenCodeVision/settings.json` | `~/Library/Application Support/OpenCodeVision/settings.json` |
 | Log | same folder, `sticky.log` | same folder | same folder |
 
 `Environment.SpecialFolder.ApplicationData` resolves these; `%APPDATA%` is the

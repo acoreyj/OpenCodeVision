@@ -14,7 +14,7 @@ Start with the [README](../README.md) if you just want to run the app.
 | [Development](development.md) | You are adding a state, changing thresholds, or reviewing changes. |
 | [Decisions](decisions.md) | You want the reasons behind the design, and what each choice costs. |
 | [Upstream: desktop sidecar](upstream-desktop-sidecar.md) | You need the desktop-app limitation or the draft issue asking upstream to expose a discovery file. |
-| [Design spec](superpowers/specs/2026-10-27-opencode-sticky-design.md) | You need the original product requirements. |
-| [Implementation plan](superpowers/plans/2026-10-27-opencode-sticky.md) | You need the task-by-task build history. |
+| [Design spec](superpowers/specs/2026-10-27-opencode-vision-design.md) | You need the original product requirements. |
+| [Implementation plan](superpowers/plans/2026-10-27-opencode-vision.md) | You need the task-by-task build history. |
 
 `AGENTS.md` at the repository root is the short entry point for coding agents.

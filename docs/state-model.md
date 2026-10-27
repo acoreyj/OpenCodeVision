@@ -1,7 +1,7 @@
 # State model
 
 Everything here is implemented in `Core/StatusEvaluator.cs` and covered by
-`tests/OpenCodeSticky.Core.Tests/StatusEvaluatorTests.cs`.
+`tests/OpenCodeVision.Core.Tests/StatusEvaluatorTests.cs`.
 
 ## Which sessions appear
 

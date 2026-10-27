@@ -1,8 +1,12 @@
-# OpenCode Sticky
+# OpenCode Vision
 
 A small always-on-top window that shows every opencode session on your machine
 at a glance. One row per session; the color tells you whether it is working,
 waiting for you, or blocked.
+
+> **Unofficial.** OpenCode Vision is an independent companion app. It is not
+> affiliated with, endorsed by, or sponsored by the opencode project.
+> "opencode" and related marks belong to their respective owners.
 
 ## Palette
 
@@ -36,14 +40,14 @@ service file exists. The published builds include the .NET runtime.
 
 ### Windows
 
-Unzip `OpenCodeSticky-win-x64.zip` and run `OpenCodeSticky.exe`. The build is
+Unzip `OpenCodeVision-win-x64.zip` and run `OpenCodeVision.exe`. The build is
 unsigned, so SmartScreen may ask for confirmation the first time.
 
 ### Linux
 
 ```bash
-tar -xzf OpenCodeSticky-linux-x64.tar.gz
-./OpenCodeSticky
+tar -xzf OpenCodeVision-linux-x64.tar.gz
+./OpenCodeVision
 ```
 
 A desktop environment with X11 or Wayland is required, including the usual
@@ -52,25 +56,25 @@ desktop installs but absent from a headless WSL image. The tray icon depends
 on the desktop's tray support; if it is unavailable the window still works and
 `Quit` is done by closing the window.
 
-The archive also contains `opencode-sticky.desktop` for menu integration.
+The archive also contains `opencode-vision.desktop` for menu integration.
 
 ### macOS
 
 ```bash
-tar -xzf OpenCodeSticky-macos-arm64.tar.gz   # or -x64
-open OpenCodeSticky.app
+tar -xzf OpenCodeVision-macos-arm64.tar.gz   # or -x64
+open OpenCodeVision.app
 ```
 
 The bundle is unsigned. On Apple Silicon, macOS will refuse to launch an
 unsigned bundle, so ad-hoc sign it once before opening:
 
 ```bash
-codesign --force --deep --sign - OpenCodeSticky.app
-open OpenCodeSticky.app
+codesign --force --deep --sign - OpenCodeVision.app
+open OpenCodeVision.app
 ```
 
 If Gatekeeper still refuses it, run
-`xattr -dr com.apple.quarantine OpenCodeSticky.app` once. The bundle contains
+`xattr -dr com.apple.quarantine OpenCodeVision.app` once. The bundle contains
 the Avalonia, HarfBuzz and Skia native libraries next to the executable.
 
 ## Using it
@@ -90,9 +94,9 @@ urgent state as a colored dot.
 Settings and the diagnostics log live under the platform's application-data
 folder:
 
-- Windows: `%APPDATA%\OpenCodeSticky\`
-- Linux: `~/.config/OpenCodeSticky/`
-- macOS: `~/Library/Application Support/OpenCodeSticky/`
+- Windows: `%APPDATA%\OpenCodeVision\`
+- Linux: `~/.config/OpenCodeVision/`
+- macOS: `~/Library/Application Support/OpenCodeVision/`
 
 `sticky.log` is truncated at startup when it exceeds 1 MB. `settings.json` is
 written atomically.

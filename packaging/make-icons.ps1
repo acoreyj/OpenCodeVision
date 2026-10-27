@@ -1,6 +1,6 @@
 Add-Type -AssemblyName System.Drawing
 
-$root = Join-Path $PSScriptRoot "..\src\OpenCodeSticky.App\Assets"
+$root = Join-Path $PSScriptRoot "..\src\OpenCodeVision.App\Assets"
 New-Item -ItemType Directory -Force $root | Out-Null
 
 $colors = @{

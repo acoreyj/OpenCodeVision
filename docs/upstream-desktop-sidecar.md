@@ -1,7 +1,7 @@
 # Upstream request: expose desktop-app sidecar sessions
 
 This is a draft issue for the OpenCode desktop application. It is not a bug in
-OpenCode Sticky; the desktop app simply has no external discovery point today.
+OpenCode Vision; the desktop app simply has no external discovery point today.
 
 ## Summary
 

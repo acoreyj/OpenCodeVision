@@ -1,0 +1,88 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:OpenCodeVision.App.ViewModels"
+        x:Class="OpenCodeVision.App.MainWindow"
+        Title="OpenCode Vision"
+        Width="320"
+        MinWidth="320"
+        MaxWidth="320"
+        CanResize="False"
+        SizeToContent="Height"
+        SystemDecorations="None"
+        WindowStartupLocation="Manual"
+        Background="{StaticResource WindowBackground}"
+        ShowInTaskbar="True">
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:ServiceHeaderViewModel">
+      <TextBlock Text="{Binding Name}"
+                 Margin="10,10,10,4"
+                 FontSize="10"
+                 FontWeight="SemiBold"
+                 Foreground="{StaticResource MutedText}" />
+    </DataTemplate>
+    <DataTemplate DataType="vm:RowViewModel">
+      <Border PointerPressed="OnRowPressed"
+              Background="Transparent"
+              Opacity="{Binding RowOpacity}"
+              Padding="10,4"
+              Cursor="Hand">
+        <Grid ColumnDefinitions="4,*,Auto">
+          <Border Background="{Binding StateBrush}"
+                  CornerRadius="2"
+                  Opacity="{Binding FlashOpacity}" />
+          <StackPanel Grid.Column="1" Margin="8,0" Spacing="1">
+            <TextBlock Text="{Binding Project}"
+                       FontSize="10"
+                       Foreground="{StaticResource MutedText}"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding Title}"
+                       FontSize="12"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding Tooltip}" />
+          </StackPanel>
+          <TextBlock Grid.Column="2"
+                     Text="{Binding Elapsed}"
+                     FontSize="10"
+                     Foreground="{StaticResource MutedText}"
+                     VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <Grid RowDefinitions="Auto,Auto">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="10,6,6,2">
+      <TextBlock Text="OpenCode Vision"
+                 FontSize="13"
+                 FontWeight="SemiBold"
+                 VerticalAlignment="Center"
+                 Cursor="SizeAll"
+                 PointerPressed="OnTitlePressed" />
+      <Button Grid.Column="1"
+              Content="⚙"
+              Click="OnOptions"
+              Background="Transparent"
+              BorderThickness="0"
+              Padding="8,2"
+              FontSize="12" />
+      <Button Grid.Column="2"
+              Content="—"
+              Click="OnMinimize"
+              Background="Transparent"
+              BorderThickness="0"
+              Padding="8,2"
+              FontSize="12" />
+      <Button Grid.Column="3"
+              Content="✕"
+              Click="OnCloseWindow"
+              Background="Transparent"
+              BorderThickness="0"
+              Padding="8,2"
+              FontSize="11" />
+    </Grid>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <ItemsControl x:Name="Items" Margin="0,0,0,8" />
+    </ScrollViewer>
+  </Grid>
+</Window>

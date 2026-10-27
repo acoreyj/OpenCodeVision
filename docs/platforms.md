@@ -43,7 +43,7 @@ the shared background service remain visible everywhere.
 - **Runtime libraries**: needs the usual X11 stack (`libX11`, `libICE`,
   `libSM`) and fontconfig. A headless WSL image has none of these and stops at
   `libICE` before opening a window.
-- **Packaging**: single ELF x64 binary plus `opencode-sticky.desktop` in a
+- **Packaging**: single ELF x64 binary plus `opencode-vision.desktop` in a
   tar.gz. The desktop entry assumes the binary is on `PATH`; extract and add it
   to `PATH`, or edit `Exec=` to an absolute path.
 
@@ -52,17 +52,17 @@ the shared background service remain visible everywhere.
 - **Discovery**: native service only.
 - **Window/tray**: Avalonia with `NSStatusItem` for the tray. Close hides to the
   tray.
-- **Packaging**: `OpenCodeSticky.app` with `Contents/MacOS/OpenCodeSticky`, the
+- **Packaging**: `OpenCodeVision.app` with `Contents/MacOS/OpenCodeVision`, the
   three native dylibs (Avalonia, HarfBuzz, Skia), `Info.plist`, and an app PNG.
   Shipped as `macos-x64` and `macos-arm64` tarballs.
 - **Signing**: the bundle is built on Windows and is unsigned. Apple Silicon
   refuses unsigned bundles, so run this once on the Mac:
 
   ```bash
-  codesign --force --deep --sign - OpenCodeSticky.app
+  codesign --force --deep --sign - OpenCodeVision.app
   ```
 
-  If Gatekeeper still blocks it, `xattr -dr com.apple.quarantine OpenCodeSticky.app`.
+  If Gatekeeper still blocks it, `xattr -dr com.apple.quarantine OpenCodeVision.app`.
 - **Runtime verification**: none was possible on the build machine.
 
 ## Verification matrix

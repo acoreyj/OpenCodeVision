@@ -10,11 +10,11 @@
 
 ## Test-first workflow
 
-The core is developed with xUnit in `tests/OpenCodeSticky.Core.Tests`:
+The core is developed with xUnit in `tests/OpenCodeVision.Core.Tests`:
 
 ```powershell
-dotnet test tests/OpenCodeSticky.Core.Tests --filter SessionMonitor
-dotnet test tests/OpenCodeSticky.Core.Tests
+dotnet test tests/OpenCodeVision.Core.Tests --filter SessionMonitor
+dotnet test tests/OpenCodeVision.Core.Tests
 ```
 
 For a new rule:

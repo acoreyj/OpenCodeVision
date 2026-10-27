@@ -4,9 +4,9 @@ Start with the log:
 
 | Platform | Path |
 | --- | --- |
-| Windows | `%APPDATA%\OpenCodeSticky\sticky.log` |
-| Linux | `~/.config/OpenCodeSticky/sticky.log` |
-| macOS | `~/Library/Application Support/OpenCodeSticky/sticky.log` |
+| Windows | `%APPDATA%\OpenCodeVision\sticky.log` |
+| Linux | `~/.config/OpenCodeVision/sticky.log` |
+| macOS | `~/Library/Application Support/OpenCodeVision/sticky.log` |
 
 A healthy startup looks like:
 
@@ -105,15 +105,15 @@ sudo apt install libice6 libsm6 libx11-6
 The bundle is unsigned. On Apple Silicon:
 
 ```bash
-codesign --force --deep --sign - OpenCodeSticky.app
-xattr -dr com.apple.quarantine OpenCodeSticky.app
-open OpenCodeSticky.app
+codesign --force --deep --sign - OpenCodeVision.app
+xattr -dr com.apple.quarantine OpenCodeVision.app
+open OpenCodeVision.app
 ```
 
 If it still fails, run the executable from a terminal to see the error:
 
 ```bash
-./OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky
+./OpenCodeVision.app/Contents/MacOS/OpenCodeVision
 ```
 
 ## Always-on-top does nothing

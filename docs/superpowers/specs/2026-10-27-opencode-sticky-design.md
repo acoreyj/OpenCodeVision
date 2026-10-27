@@ -1,4 +1,4 @@
-# OpenCode Sticky — design
+# OpenCode Vision — design
 
 Date: 2026-10-27
 Status: draft for approval
@@ -211,8 +211,8 @@ v1; low cost if trivial.
 - Tray icon via Avalonia `TrayIcon`; where a desktop environment does not
   support one, the app keeps running without it.
 - Settings: the platform's application-data folder
-  (`%APPDATA%\OpenCodeSticky\settings.json`, `~/.config/OpenCodeSticky/`,
-  `~/Library/Application Support/OpenCodeSticky/`) — enabled services, window
+  (`%APPDATA%\OpenCodeVision\settings.json`, `~/.config/OpenCodeVision/`,
+  `~/Library/Application Support/OpenCodeVision/`) — enabled services, window
   position, always-on-top, flash. Written atomically; corrupt file falls back
   to defaults.
 - One UI dependency: Avalonia (MIT). No other third-party packages.

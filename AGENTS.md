@@ -1,14 +1,14 @@
 # AGENTS.md
 
-OpenCode Sticky is a .NET 8 Avalonia tray app that shows opencode session state
+OpenCode Vision is a .NET 8 Avalonia tray app that shows opencode session state
 on Windows, Linux and macOS. Core logic is UI-free and tested with xUnit.
 
 ## Commands
 
 ```powershell
-dotnet build OpenCodeSticky.sln -c Debug
-dotnet test tests/OpenCodeSticky.Core.Tests
-dotnet run --project src/OpenCodeSticky.App
+dotnet build OpenCodeVision.sln -c Debug
+dotnet test tests/OpenCodeVision.Core.Tests
+dotnet run --project src/OpenCodeVision.App
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1
 ```
 
@@ -17,9 +17,9 @@ Packaging needs WSL for `tar`/`wslpath`.
 
 ## Structure
 
-- `src/OpenCodeSticky.Core` — discovery, HTTP/SSE, state rules, settings, monitor
-- `src/OpenCodeSticky.App` — Avalonia window, options dialog, tray, diagnostics log
-- `tests/OpenCodeSticky.Core.Tests` — 62 tests, fakes in `Fakes.cs`
+- `src/OpenCodeVision.Core` — discovery, HTTP/SSE, state rules, settings, monitor
+- `src/OpenCodeVision.App` — Avalonia window, options dialog, tray, diagnostics log
+- `tests/OpenCodeVision.Core.Tests` — 62 tests, fakes in `Fakes.cs`
 - `packaging/` — `.desktop`, `Info.plist`, icon generator
 - `scripts/package.ps1` — publish + archive four RIDs
 - `artifacts/` — generated, git-ignored

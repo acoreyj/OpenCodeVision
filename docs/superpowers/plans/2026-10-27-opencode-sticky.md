@@ -1,19 +1,19 @@
-# OpenCode Sticky Implementation Plan
+# OpenCode Vision Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a single-window desktop tray app for Windows, Linux and macOS that shows every top-level opencode session, native and WSL, with a live state color, always-on-top and flash options, and per-service toggles.
 
-**Architecture:** A UI-free `OpenCodeSticky.Core` class library owns discovery, HTTP/SSE, status derivation, settings and the session monitor. A thin Avalonia app (`OpenCodeSticky.App`) owns the window, tray icon and options dialog. Core is tested with xUnit; the UI is verified by running it against the live services and reading the diagnostics log.
+**Architecture:** A UI-free `OpenCodeVision.Core` class library owns discovery, HTTP/SSE, status derivation, settings and the session monitor. A thin Avalonia app (`OpenCodeVision.App`) owns the window, tray icon and options dialog. Core is tested with xUnit; the UI is verified by running it against the live services and reading the diagnostics log.
 
 **Tech Stack:** .NET 8, Avalonia 11.3.22, System.Text.Json, xUnit. No third-party NuGet packages besides Avalonia.
 
-**Spec:** `docs/superpowers/specs/2026-10-27-opencode-sticky-design.md`
+**Spec:** `docs/superpowers/specs/2026-10-27-opencode-vision-design.md`
 
 ## Global Constraints
 
 - Target `net8.0` for Core, tests and the Avalonia app. Publish `win-x64`, `linux-x64`, `osx-x64` and `osx-arm64`.
-- No third-party packages in `OpenCodeSticky.Core`; only Avalonia 11.3.22 in the app.
+- No third-party packages in `OpenCodeVision.Core`; only Avalonia 11.3.22 in the app.
 - Auth is HTTP Basic: username `opencode`, password from the service file's `password`.
 - Native service file: `%USERPROFILE%\.local\state\opencode\service.json` on Windows, `~/.local/state/opencode/service.json` on Linux/macOS.
 - WSL is probed only on Windows; `ServiceDiscovery` accepts a null gateway elsewhere.
@@ -22,7 +22,7 @@
 - Recency window: 30 minutes. Blue expires from "blocked" after 24 hours. Offline rows linger 5 minutes.
 - Discovery rescan: 60 s. Full refresh: 10 s. SSE-triggered refresh: 300 ms debounce. Working grace: 20 s. Idle tolerance: 2 s.
 - Palette: grey `#8A8A8A` idle, green `#3FB950` working, amber `#D29922` approval, blue `#388BFD` waiting, red `#F85149` errored.
-- Settings file: `<app-data>/OpenCodeSticky/settings.json` (`%APPDATA%` on Windows, `~/.config` on Linux, `~/Library/Application Support` on macOS).
+- Settings file: `<app-data>/OpenCodeVision/settings.json` (`%APPDATA%` on Windows, `~/.config` on Linux, `~/Library/Application Support` on macOS).
 
 ## Review Focus
 
@@ -37,17 +37,17 @@
 ### Task 1: Solution, models, status evaluation
 
 **Files:**
-- Create: `.gitignore`, `OpenCodeSticky.sln`
-- Create: `src/OpenCodeSticky.Core/OpenCodeSticky.Core.csproj`
-- Create: `src/OpenCodeSticky.Core/SessionState.cs`
-- Create: `src/OpenCodeSticky.Core/SessionInfo.cs`
-- Create: `src/OpenCodeSticky.Core/SessionRow.cs`
-- Create: `src/OpenCodeSticky.Core/ServiceModels.cs`
-- Create: `src/OpenCodeSticky.Core/StatusEvaluator.cs`
-- Create: `src/OpenCodeSticky.Core/ElapsedFormatter.cs`
-- Create: `tests/OpenCodeSticky.Core.Tests/OpenCodeSticky.Core.Tests.csproj`
-- Test: `tests/OpenCodeSticky.Core.Tests/StatusEvaluatorTests.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/ElapsedFormatterTests.cs`
+- Create: `.gitignore`, `OpenCodeVision.sln`
+- Create: `src/OpenCodeVision.Core/OpenCodeVision.Core.csproj`
+- Create: `src/OpenCodeVision.Core/SessionState.cs`
+- Create: `src/OpenCodeVision.Core/SessionInfo.cs`
+- Create: `src/OpenCodeVision.Core/SessionRow.cs`
+- Create: `src/OpenCodeVision.Core/ServiceModels.cs`
+- Create: `src/OpenCodeVision.Core/StatusEvaluator.cs`
+- Create: `src/OpenCodeVision.Core/ElapsedFormatter.cs`
+- Create: `tests/OpenCodeVision.Core.Tests/OpenCodeVision.Core.Tests.csproj`
+- Test: `tests/OpenCodeVision.Core.Tests/StatusEvaluatorTests.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/ElapsedFormatterTests.cs`
 
 **Interfaces:**
 - Produces: `enum SessionState { Idle, Working, WaitingApproval, WaitingForYou, Errored }`
@@ -64,14 +64,14 @@
 
 ```powershell
 git init
-dotnet new sln -n OpenCodeSticky
-dotnet new classlib -n OpenCodeSticky.Core -o src/OpenCodeSticky.Core -f net8.0
-dotnet new xunit -n OpenCodeSticky.Core.Tests -o tests/OpenCodeSticky.Core.Tests -f net8.0
-dotnet sln add src/OpenCodeSticky.Core src/OpenCodeSticky.Core.Tests
-dotnet add tests/OpenCodeSticky.Core.Tests reference src/OpenCodeSticky.Core
+dotnet new sln -n OpenCodeVision
+dotnet new classlib -n OpenCodeVision.Core -o src/OpenCodeVision.Core -f net8.0
+dotnet new xunit -n OpenCodeVision.Core.Tests -o tests/OpenCodeVision.Core.Tests -f net8.0
+dotnet sln add src/OpenCodeVision.Core src/OpenCodeVision.Core.Tests
+dotnet add tests/OpenCodeVision.Core.Tests reference src/OpenCodeVision.Core
 ```
 
-Delete the template placeholders `src/OpenCodeSticky.Core/Class1.cs` and `tests/OpenCodeSticky.Core.Tests/UnitTest1.cs`.
+Delete the template placeholders `src/OpenCodeVision.Core/Class1.cs` and `tests/OpenCodeVision.Core.Tests/UnitTest1.cs`.
 
 `.gitignore`: `bin/`, `obj/`, `.vs/`, `*.user`, `publish/`, `artifacts/`, `*.log`.
 
@@ -121,7 +121,7 @@ Create `SessionInfo` and stubs only as needed to compile. In `StatusEvaluatorTes
 
 - [ ] **Step 3: Run the tests and watch them fail**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests`
 Expected: compile failure or `NotImplementedException` for `StatusEvaluator`.
 
 - [ ] **Step 4: Implement the models and evaluator**
@@ -157,13 +157,13 @@ IsBlocked: WaitingApproval always; WaitingForYou while now - since < 24h; Errore
 
 - [ ] **Step 5: Run the tests until green**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests`
 Expected: all pass.
 
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add .gitignore OpenCodeSticky.sln src tests docs
+git add .gitignore OpenCodeVision.sln src tests docs
 git commit -m "feat(core): session models and status evaluation"
 ```
 
@@ -172,11 +172,11 @@ git commit -m "feat(core): session models and status evaluation"
 ### Task 2: Service discovery
 
 **Files:**
-- Create: `src/OpenCodeSticky.Core/Discovery/ServiceFile.cs`
-- Create: `src/OpenCodeSticky.Core/Discovery/ServiceDiscovery.cs`
-- Create: `src/OpenCodeSticky.Core/Discovery/IWslGateway.cs`
-- Create: `src/OpenCodeSticky.Core/Discovery/WslGateway.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/ServiceDiscoveryTests.cs`
+- Create: `src/OpenCodeVision.Core/Discovery/ServiceFile.cs`
+- Create: `src/OpenCodeVision.Core/Discovery/ServiceDiscovery.cs`
+- Create: `src/OpenCodeVision.Core/Discovery/IWslGateway.cs`
+- Create: `src/OpenCodeVision.Core/Discovery/WslGateway.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/ServiceDiscoveryTests.cs`
 
 **Interfaces:**
 - Produces: `record ServiceCandidate(string Key, string DisplayName, Uri Url, string Password, Uri? AlternateUrl = null)`
@@ -210,7 +210,7 @@ git commit -m "feat(core): session models and status evaluation"
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter ServiceDiscovery`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter ServiceDiscovery`
 Expected: types missing.
 
 - [ ] **Step 3: Implement discovery**
@@ -221,7 +221,7 @@ Expected: types missing.
 
 - [ ] **Step 4: Run the tests until green**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter ServiceDiscovery`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter ServiceDiscovery`
 Expected: pass.
 
 - [ ] **Step 5: Commit**
@@ -236,10 +236,10 @@ git commit -m "feat(core): native and WSL service discovery"
 ### Task 3: opencode client and SSE
 
 **Files:**
-- Create: `src/OpenCodeSticky.Core/OpenCodeClient.cs`
-- Create: `src/OpenCodeSticky.Core/SseParser.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/OpenCodeClientTests.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/SseParserTests.cs`
+- Create: `src/OpenCodeVision.Core/OpenCodeClient.cs`
+- Create: `src/OpenCodeVision.Core/SseParser.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/OpenCodeClientTests.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/SseParserTests.cs`
 
 **Interfaces:**
 - Produces: `interface IOpenCodeClient : IDisposable` with `GetInfoAsync`, `GetSessionsAsync`, `GetPendingPermissionCountAsync(string sessionId, CancellationToken)`, `IAsyncEnumerable<ServerEvent> SubscribeAsync(CancellationToken)`
@@ -288,7 +288,7 @@ Use this live payload shape as the fixture:
 
 - [ ] **Step 2: Run and watch them fail**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter "Sse|OpenCodeClient"`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter "Sse|OpenCodeClient"`
 Expected: types missing.
 
 - [ ] **Step 3: Implement**
@@ -302,7 +302,7 @@ Expected: types missing.
 
 - [ ] **Step 4: Run until green**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter "Sse|OpenCodeClient"`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter "Sse|OpenCodeClient"`
 Expected: pass.
 
 - [ ] **Step 5: Commit**
@@ -317,9 +317,9 @@ git commit -m "feat(core): opencode HTTP client and SSE reader"
 ### Task 4: Settings
 
 **Files:**
-- Create: `src/OpenCodeSticky.Core/Settings.cs`
-- Create: `src/OpenCodeSticky.Core/SettingsStore.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/SettingsStoreTests.cs`
+- Create: `src/OpenCodeVision.Core/Settings.cs`
+- Create: `src/OpenCodeVision.Core/SettingsStore.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/SettingsStoreTests.cs`
 
 **Interfaces:**
 - Produces: `Settings` with `bool AlwaysOnTop = true`, `bool FlashOnBlock = true`, `double? WindowLeft`, `double? WindowTop`, `Dictionary<string,bool> ServiceEnabled`, `bool IsServiceEnabled(string key)`, `void SetServiceEnabled(string key, bool enabled)`
@@ -339,7 +339,7 @@ git commit -m "feat(core): opencode HTTP client and SSE reader"
 
 - [ ] **Step 2: Run and watch them fail**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter SettingsStore`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter SettingsStore`
 
 - [ ] **Step 3: Implement**
 
@@ -347,7 +347,7 @@ Serialize with `System.Text.Json` and `WriteIndented = true`. `Save` writes `<pa
 
 - [ ] **Step 4: Run until green**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter SettingsStore`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter SettingsStore`
 Expected: pass.
 
 - [ ] **Step 5: Commit**
@@ -362,10 +362,10 @@ git commit -m "feat(core): persisted settings"
 ### Task 5: Session monitor
 
 **Files:**
-- Create: `src/OpenCodeSticky.Core/SessionMonitor.cs`
-- Create: `src/OpenCodeSticky.Core/ServiceStatus.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/SessionMonitorTests.cs`
-- Test: `tests/OpenCodeSticky.Core.Tests/Fakes.cs`
+- Create: `src/OpenCodeVision.Core/SessionMonitor.cs`
+- Create: `src/OpenCodeVision.Core/ServiceStatus.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/SessionMonitorTests.cs`
+- Test: `tests/OpenCodeVision.Core.Tests/Fakes.cs`
 
 **Interfaces:**
 - Consumes: `ServiceDiscovery`, `ServiceCandidate`, `IOpenCodeClient`, `Settings`, `StatusEvaluator`
@@ -401,7 +401,7 @@ Use `FakeOpenCodeClient` (scripted `Sessions`, `Permissions`, `Info`, optional `
 
 - [ ] **Step 2: Run and watch them fail**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter SessionMonitor`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests --filter SessionMonitor`
 
 - [ ] **Step 3: Implement**
 
@@ -419,7 +419,7 @@ Run: `dotnet test tests/OpenCodeSticky.Core.Tests --filter SessionMonitor`
 
 - [ ] **Step 4: Run until green**
 
-Run: `dotnet test tests/OpenCodeSticky.Core.Tests`
+Run: `dotnet test tests/OpenCodeVision.Core.Tests`
 Expected: all tests pass.
 
 - [ ] **Step 5: Commit**
@@ -434,20 +434,20 @@ git commit -m "feat(core): session monitor with discovery, polling and SSE"
 ### Task 6: Avalonia shell
 
 **Files:**
-- Create: `src/OpenCodeSticky.App/OpenCodeSticky.App.csproj`
-- Create: `src/OpenCodeSticky.App/Program.cs`
-- Create: `src/OpenCodeSticky.App/App.axaml`, `App.axaml.cs`
-- Create: `src/OpenCodeSticky.App/MainWindow.axaml`, `MainWindow.axaml.cs`
-- Create: `src/OpenCodeSticky.App/ViewModels/RowViewModel.cs`
-- Create: `src/OpenCodeSticky.App/ViewModels/ServiceHeaderViewModel.cs`
-- Create: `src/OpenCodeSticky.App/DiagnosticsLog.cs`
-- Modify: `OpenCodeSticky.sln` (add the app project, reference Core)
+- Create: `src/OpenCodeVision.App/OpenCodeVision.App.csproj`
+- Create: `src/OpenCodeVision.App/Program.cs`
+- Create: `src/OpenCodeVision.App/App.axaml`, `App.axaml.cs`
+- Create: `src/OpenCodeVision.App/MainWindow.axaml`, `MainWindow.axaml.cs`
+- Create: `src/OpenCodeVision.App/ViewModels/RowViewModel.cs`
+- Create: `src/OpenCodeVision.App/ViewModels/ServiceHeaderViewModel.cs`
+- Create: `src/OpenCodeVision.App/DiagnosticsLog.cs`
+- Modify: `OpenCodeVision.sln` (add the app project, reference Core)
 
 **Interfaces:**
 - Consumes: `SessionMonitor.Rows`, `Services`, `Changed`, `BlockedStarted`; `Settings`, `SettingsStore`
 - Produces: `MainWindow(SessionMonitor monitor, Settings settings, SettingsStore store, DiagnosticsLog log)`
 - Produces: `RowViewModel` with `Project`, `Title`, `Elapsed`, `StateBrush`, `FlashOpacity`, `IsOffline`
-- Produces: diagnostics log at `<app-data>/OpenCodeSticky/sticky.log`
+- Produces: diagnostics log at `<app-data>/OpenCodeVision/sticky.log`
 
 - [ ] **Step 1: Create the project**
 
@@ -460,8 +460,8 @@ Create the csproj by hand (no template install needed):
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>OpenCodeSticky</AssemblyName>
-    <RootNamespace>OpenCodeSticky.App</RootNamespace>
+    <AssemblyName>OpenCodeVision</AssemblyName>
+    <RootNamespace>OpenCodeVision.App</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
   <ItemGroup>
@@ -470,14 +470,14 @@ Create the csproj by hand (no template install needed):
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\OpenCodeSticky.Core\OpenCodeSticky.Core.csproj" />
+    <ProjectReference Include="..\OpenCodeVision.Core\OpenCodeVision.Core.csproj" />
   </ItemGroup>
 </Project>
 ```
 
 ```powershell
-dotnet sln add src/OpenCodeSticky.App
-dotnet add src/OpenCodeSticky.App reference src/OpenCodeSticky.Core
+dotnet sln add src/OpenCodeVision.App
+dotnet add src/OpenCodeVision.App reference src/OpenCodeVision.Core
 ```
 
 - [ ] **Step 2: App bootstrap**
@@ -499,7 +499,7 @@ dotnet add src/OpenCodeSticky.App reference src/OpenCodeSticky.Core
 
 `App.axaml.cs` startup:
 
-1. `var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpenCodeSticky");`
+1. `var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OpenCodeVision");`
 2. Settings store at `root/settings.json`; diagnostics log at `root/sticky.log`.
 3. Native service file: `Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state", "opencode", "service.json")`.
 4. `IWslGateway? wsl = OperatingSystem.IsWindows() ? new WslGateway() : null;`
@@ -530,11 +530,11 @@ Code-behind:
 - [ ] **Step 4: Build and run against the live services**
 
 ```powershell
-dotnet build OpenCodeSticky.sln -c Debug
-Start-Process dotnet -ArgumentList 'run --project src/OpenCodeSticky.App'
+dotnet build OpenCodeVision.sln -c Debug
+Start-Process dotnet -ArgumentList 'run --project src/OpenCodeVision.App'
 Start-Sleep -Seconds 12
-Get-Content "$env:APPDATA\OpenCodeSticky\sticky.log" -Tail 20
-Get-Process OpenCodeSticky | Select-Object MainWindowTitle, Responding
+Get-Content "$env:APPDATA\OpenCodeVision\sticky.log" -Tail 20
+Get-Process OpenCodeVision | Select-Object MainWindowTitle, Responding
 ```
 
 Expected: build succeeds; log lists the discovered services and recent rows; the process is responding with title `opencode`.
@@ -542,7 +542,7 @@ Expected: build succeeds; log lists the discovered services and recent rows; the
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add src OpenCodeSticky.sln
+git add src OpenCodeVision.sln
 git commit -m "feat(app): cross-platform Avalonia session window"
 ```
 
@@ -551,11 +551,11 @@ git commit -m "feat(app): cross-platform Avalonia session window"
 ### Task 7: Options and tray
 
 **Files:**
-- Create: `src/OpenCodeSticky.App/OptionsWindow.axaml`, `OptionsWindow.axaml.cs`
-- Create: `src/OpenCodeSticky.App/AppTrayIcon.cs`
-- Create: `src/OpenCodeSticky.App/Assets/tray-*.png` (five state icons)
+- Create: `src/OpenCodeVision.App/OptionsWindow.axaml`, `OptionsWindow.axaml.cs`
+- Create: `src/OpenCodeVision.App/AppTrayIcon.cs`
+- Create: `src/OpenCodeVision.App/Assets/tray-*.png` (five state icons)
 - Create: `packaging/make-icons.ps1`
-- Modify: `src/OpenCodeSticky.App/App.axaml` (AvaloniaResource), `App.axaml.cs`, `MainWindow.axaml`, `MainWindow.axaml.cs`
+- Modify: `src/OpenCodeVision.App/App.axaml` (AvaloniaResource), `App.axaml.cs`, `MainWindow.axaml`, `MainWindow.axaml.cs`
 
 **Interfaces:**
 - Consumes: `SessionMonitor.Services`, `SetServiceEnabled`, `RescanAsync`; `Settings`, `SettingsStore`
@@ -564,7 +564,7 @@ git commit -m "feat(app): cross-platform Avalonia session window"
 
 - [ ] **Step 1: Generate state icons**
 
-`packaging/make-icons.ps1` uses `System.Drawing` to draw a 64×64 dark rounded square with a centred dot, once per state color (`idle`, `working`, `approval`, `waiting`, `errored`), writing `src/OpenCodeSticky.App/Assets/tray-<state>.png`. Run it once and commit the PNGs. Add to the csproj:
+`packaging/make-icons.ps1` uses `System.Drawing` to draw a 64×64 dark rounded square with a centred dot, once per state color (`idle`, `working`, `approval`, `waiting`, `errored`), writing `src/OpenCodeVision.App/Assets/tray-<state>.png`. Run it once and commit the PNGs. Add to the csproj:
 
 ```xml
 <ItemGroup>
@@ -614,14 +614,14 @@ git commit -m "feat(app): options dialog and tray for all platforms"
 **Files:**
 - Create: `README.md`
 - Create: `packaging/macos/Info.plist`
-- Create: `packaging/linux/opencode-sticky.desktop`
-- Modify: `src/OpenCodeSticky.App/OpenCodeSticky.App.csproj` (publish properties)
+- Create: `packaging/linux/opencode-vision.desktop`
+- Modify: `src/OpenCodeVision.App/OpenCodeVision.App.csproj` (publish properties)
 - Create: `scripts/package.ps1`
 
 **Interfaces:**
-- Produces: `artifacts/OpenCodeSticky-win-x64.zip`
-- Produces: `artifacts/OpenCodeSticky-linux-x64.tar.gz`
-- Produces: `artifacts/OpenCodeSticky-macos-x64.tar.gz`, `artifacts/OpenCodeSticky-macos-arm64.tar.gz` (each containing `OpenCodeSticky.app`)
+- Produces: `artifacts/OpenCodeVision-win-x64.zip`
+- Produces: `artifacts/OpenCodeVision-linux-x64.tar.gz`
+- Produces: `artifacts/OpenCodeVision-macos-x64.tar.gz`, `artifacts/OpenCodeVision-macos-arm64.tar.gz` (each containing `OpenCodeVision.app`)
 
 - [ ] **Step 1: Publish properties**
 
@@ -636,24 +636,24 @@ git commit -m "feat(app): options dialog and tray for all platforms"
 
 ```powershell
 foreach ($rid in @('win-x64','linux-x64','osx-x64','osx-arm64')) {
-  dotnet publish src/OpenCodeSticky.App -c Release -r $rid --self-contained true -o "artifacts/$rid"
+  dotnet publish src/OpenCodeVision.App -c Release -r $rid --self-contained true -o "artifacts/$rid"
 }
 ```
 
-Expected: four directories, each with a single executable named `OpenCodeSticky` (`.exe` on Windows). Cross-publishing from Windows is supported by Avalonia; failures must be fixed, not skipped.
+Expected: four directories, each with a single executable named `OpenCodeVision` (`.exe` on Windows). Cross-publishing from Windows is supported by Avalonia; failures must be fixed, not skipped.
 
 - [ ] **Step 3: Package**
 
 `scripts/package.ps1`:
 
-- Windows: zip `artifacts/win-x64/*` to `artifacts/OpenCodeSticky-win-x64.zip`.
-- Linux: copy `opencode-sticky.desktop` next to the binary, then tar.gz it via WSL (`wsl -e bash -lc 'chmod +x ... && tar -czf ...'`) so the executable bit survives. The desktop entry runs `OpenCodeSticky` and has `Terminal=false`, `Categories=Development;`.
-- macOS: stage `OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky`, `Contents/Info.plist` (identifier `ai.opencode.sticky`, executable `OpenCodeSticky`, `LSMinimumSystemVersion` 11.0, `NSHighResolutionCapable` true), and `Contents/Resources/app.png`. Tar.gz each architecture via WSL with `chmod +x` on the executable.
+- Windows: zip `artifacts/win-x64/*` to `artifacts/OpenCodeVision-win-x64.zip`.
+- Linux: copy `opencode-vision.desktop` next to the binary, then tar.gz it via WSL (`wsl -e bash -lc 'chmod +x ... && tar -czf ...'`) so the executable bit survives. The desktop entry runs `OpenCodeVision` and has `Terminal=false`, `Categories=Development;`.
+- macOS: stage `OpenCodeVision.app/Contents/MacOS/OpenCodeVision`, `Contents/Info.plist` (identifier `ai.opencode.vision`, executable `OpenCodeVision`, `LSMinimumSystemVersion` 11.0, `NSHighResolutionCapable` true), and `Contents/Resources/app.png`. Tar.gz each architecture via WSL with `chmod +x` on the executable.
 
 - [ ] **Step 4: Smoke-test what this machine can run**
 
-- Windows: run `artifacts/win-x64/OpenCodeSticky.exe`, wait 12 s, check the log shows services and rows, then quit from the tray.
-- Linux: from WSL Ubuntu, try `./OpenCodeSticky` with WSLg; if a display is unavailable, record that the binary starts but cannot open a window, and do not claim runtime verification.
+- Windows: run `artifacts/win-x64/OpenCodeVision.exe`, wait 12 s, check the log shows services and rows, then quit from the tray.
+- Linux: from WSL Ubuntu, try `./OpenCodeVision` with WSLg; if a display is unavailable, record that the binary starts but cannot open a window, and do not claim runtime verification.
 - macOS: verify the `.app` tree and that the binary is the expected architecture (`file` in WSL). Runtime verification is not possible here and must be stated as such in the README.
 
 - [ ] **Step 5: README**

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=OpenCode Vision
+Comment=Live session status for opencode
+Exec=OpenCodeVision
+Terminal=false
+Categories=Development;

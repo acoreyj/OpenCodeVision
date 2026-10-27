@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="OpenCodeVision.App.OptionsWindow"
+        Title="OpenCode Vision options"
+        Width="420"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBackground}">
+  <StackPanel Margin="16" Spacing="10">
+    <TextBlock Text="General" FontWeight="SemiBold" />
+    <CheckBox x:Name="AlwaysOnTop" Content="Always on top" />
+    <CheckBox x:Name="FlashOnBlock" Content="Flash when a session starts blocking" />
+
+    <TextBlock Text="Streams" FontWeight="SemiBold" Margin="0,8,0,0" />
+    <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+      <StackPanel x:Name="Streams" Spacing="4" />
+    </ScrollViewer>
+    <Button x:Name="RescanButton" Content="Rescan" Click="OnRescan" HorizontalAlignment="Left" />
+
+    <Button Content="Close" Click="OnClose" HorizontalAlignment="Right" Margin="0,4,0,0" />
+    <TextBlock Text="Unofficial companion. Not affiliated with the opencode project."
+               FontSize="10"
+               Foreground="{StaticResource MutedText}"
+               TextWrapping="Wrap"
+               Margin="0,8,0,0" />
+  </StackPanel>
+</Window>

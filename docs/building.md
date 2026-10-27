@@ -13,9 +13,9 @@
 
 ```powershell
 dotnet restore
-dotnet build OpenCodeSticky.sln -c Debug
-dotnet test tests/OpenCodeSticky.Core.Tests
-dotnet run --project src/OpenCodeSticky.App
+dotnet build OpenCodeVision.sln -c Debug
+dotnet test tests/OpenCodeVision.Core.Tests
+dotnet run --project src/OpenCodeVision.App
 ```
 
 The test suite is the fast gate: 62 tests, no network, no UI.
@@ -23,10 +23,10 @@ The test suite is the fast gate: 62 tests, no network, no UI.
 ## Project layout
 
 ```
-OpenCodeSticky.sln
-src/OpenCodeSticky.Core/      net8.0 class library
-src/OpenCodeSticky.App/       net8.0 Avalonia app
-tests/OpenCodeSticky.Core.Tests/  xUnit
+OpenCodeVision.sln
+src/OpenCodeVision.Core/      net8.0 class library
+src/OpenCodeVision.App/       net8.0 Avalonia app
+tests/OpenCodeVision.Core.Tests/  xUnit
 packaging/                    desktop entry, Info.plist, icon generator
 scripts/package.ps1           publish + archive all four RIDs
 artifacts/                    build output, git-ignored
@@ -35,7 +35,7 @@ artifacts/                    build output, git-ignored
 ## Publish one runtime
 
 ```powershell
-dotnet publish src/OpenCodeSticky.App -c Release -r win-x64 -o artifacts/win-x64
+dotnet publish src/OpenCodeVision.App -c Release -r win-x64 -o artifacts/win-x64
 ```
 
 Publish properties (`SelfContained`, `PublishSingleFile`,
@@ -53,17 +53,17 @@ It publishes and packages:
 
 | RID | Output |
 | --- | --- |
-| `win-x64` | `artifacts/OpenCodeSticky-win-x64.zip` |
-| `linux-x64` | `artifacts/OpenCodeSticky-linux-x64.tar.gz` |
-| `osx-x64` | `artifacts/OpenCodeSticky-macos-x64.tar.gz` |
-| `osx-arm64` | `artifacts/OpenCodeSticky-macos-arm64.tar.gz` |
+| `win-x64` | `artifacts/OpenCodeVision-win-x64.zip` |
+| `linux-x64` | `artifacts/OpenCodeVision-linux-x64.tar.gz` |
+| `osx-x64` | `artifacts/OpenCodeVision-macos-x64.tar.gz` |
+| `osx-arm64` | `artifacts/OpenCodeVision-macos-arm64.tar.gz` |
 
 Packaging details:
 
 - Windows zip contains the exe and README.
 - Linux tar contains the binary, `.desktop` entry, README; `chmod +x` is applied
   through WSL.
-- macOS tar contains `OpenCodeSticky.app` (executable + three dylibs +
+- macOS tar contains `OpenCodeVision.app` (executable + three dylibs +
   `Info.plist` + icon) and the README. The script asserts the bundle contains
   every file from the publish directory.
 - macOS signing is not performed; see [Platforms](platforms.md).
@@ -71,7 +71,7 @@ Packaging details:
 ## Icons
 
 `packaging/make-icons.ps1` draws five 64×64 tray PNGs into
-`src/OpenCodeSticky.App/Assets/`. Run it only when changing the palette or icon
+`src/OpenCodeVision.App/Assets/`. Run it only when changing the palette or icon
 shape, then commit the PNGs.
 
 ## Version pin
@@ -86,5 +86,5 @@ migration, not routine maintenance.
 | `NETSDK1031` self-contained without RID | Pass `-r <rid>`; the props are conditional. |
 | Avalonia package restore fails | Check network/proxy; versions are pinned. |
 | `AVLN3001` reappears | The warning suppression in the csproj was removed; windows take DI constructors and are created in `App`. |
-| Packaging cannot delete `artifacts/win-x64` | The published app is still running. Stop `OpenCodeSticky.exe`. |
+| Packaging cannot delete `artifacts/win-x64` | The published app is still running. Stop `OpenCodeVision.exe`. |
 | Tar creation fails | WSL or `tar` is unavailable; install a distro or create the archives another way. |

@@ -3,9 +3,9 @@
 ## Two projects
 
 ```
-src/OpenCodeSticky.Core      UI-free class library (net8.0)
-src/OpenCodeSticky.App       Avalonia desktop app  (net8.0)
-tests/OpenCodeSticky.Core.Tests   xUnit, 62 tests
+src/OpenCodeVision.Core      UI-free class library (net8.0)
+src/OpenCodeVision.App       Avalonia desktop app  (net8.0)
+tests/OpenCodeVision.Core.Tests   xUnit, 62 tests
 ```
 
 `Core` has no reference to Avalonia and no knowledge of windows, trays or

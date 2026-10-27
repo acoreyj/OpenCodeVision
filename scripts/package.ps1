@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $root 'src/OpenCodeSticky.App'
+$project = Join-Path $root 'src/OpenCodeVision.App'
 $artifacts = Join-Path $root 'artifacts'
 New-Item -ItemType Directory -Force $artifacts | Out-Null
 
@@ -38,34 +38,34 @@ if (Test-Path (Join-Path $root 'README.md')) {
     Copy-Item (Join-Path $root 'README.md') (Join-Path $artifacts 'win-x64/README.md')
 }
 Compress-Archive -Path (Join-Path $artifacts 'win-x64/*') `
-    -DestinationPath (Join-Path $artifacts 'OpenCodeSticky-win-x64.zip') -Force
+    -DestinationPath (Join-Path $artifacts 'OpenCodeVision-win-x64.zip') -Force
 
 # Linux
 $linuxStage = Join-Path $artifacts 'linux-stage'
 if (Test-Path $linuxStage) { Remove-Item -Recurse -Force $linuxStage }
 New-Item -ItemType Directory -Force $linuxStage | Out-Null
-Copy-Item (Join-Path $artifacts 'linux-x64/OpenCodeSticky') $linuxStage
-Copy-Item (Join-Path $root 'packaging/linux/opencode-sticky.desktop') $linuxStage
+Copy-Item (Join-Path $artifacts 'linux-x64/OpenCodeVision') $linuxStage
+Copy-Item (Join-Path $root 'packaging/linux/opencode-vision.desktop') $linuxStage
 if (Test-Path (Join-Path $root 'README.md')) {
     Copy-Item (Join-Path $root 'README.md') $linuxStage
 }
 
 $wslStage = ToWsl $linuxStage
-$wslArchive = ToWsl (Join-Path $artifacts 'OpenCodeSticky-linux-x64.tar.gz')
-wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeSticky' && tar -czf '$wslArchive' -C '$wslStage' ."
+$wslArchive = ToWsl (Join-Path $artifacts 'OpenCodeVision-linux-x64.tar.gz')
+wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeVision' && tar -czf '$wslArchive' -C '$wslStage' ."
 
 # macOS
 foreach ($arch in @('x64', 'arm64')) {
     $rid = "osx-$arch"
     $stage = Join-Path $artifacts "$rid-stage"
-    $contents = Join-Path $stage 'OpenCodeSticky.app/Contents'
+    $contents = Join-Path $stage 'OpenCodeVision.app/Contents'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
     New-Item -ItemType Directory -Force (Join-Path $contents 'MacOS') | Out-Null
     New-Item -ItemType Directory -Force (Join-Path $contents 'Resources') | Out-Null
 
-    Copy-Item (Join-Path $artifacts "$rid/OpenCodeSticky") (Join-Path $contents 'MacOS/OpenCodeSticky')
+    Copy-Item (Join-Path $artifacts "$rid/OpenCodeVision") (Join-Path $contents 'MacOS/OpenCodeVision')
     Copy-Item (Join-Path $root 'packaging/macos/Info.plist') (Join-Path $contents 'Info.plist')
-    Copy-Item (Join-Path $root 'src/OpenCodeSticky.App/Assets/tray-idle.png') (Join-Path $contents 'Resources/app.png')
+    Copy-Item (Join-Path $root 'src/OpenCodeVision.App/Assets/tray-idle.png') (Join-Path $contents 'Resources/app.png')
 
     $published = Get-ChildItem (Join-Path $artifacts $rid) -File
     foreach ($file in $published) {
@@ -82,8 +82,8 @@ foreach ($arch in @('x64', 'arm64')) {
     }
 
     $wslStage = ToWsl $stage
-    $wslArchive = ToWsl (Join-Path $artifacts "OpenCodeSticky-macos-$arch.tar.gz")
-    wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeSticky.app/Contents/MacOS/OpenCodeSticky' && tar -czf '$wslArchive' -C '$wslStage' OpenCodeSticky.app README.md"
+    $wslArchive = ToWsl (Join-Path $artifacts "OpenCodeVision-macos-$arch.tar.gz")
+    wsl.exe -e bash -lc "chmod +x '$wslStage/OpenCodeVision.app/Contents/MacOS/OpenCodeVision' && tar -czf '$wslArchive' -C '$wslStage' OpenCodeVision.app README.md"
 }
 
 Get-ChildItem $artifacts -File | Select-Object Name, Length | Format-Table -AutoSize
