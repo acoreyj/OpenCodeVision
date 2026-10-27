@@ -15,3 +15,8 @@ public interface IWslGateway
 
     Task<string?> GetDistroAddressAsync(string distro, CancellationToken cancellationToken);
 }
+
+public interface IServiceDiscovery
+{
+    Task<IReadOnlyList<ServiceCandidate>> DiscoverAsync(CancellationToken cancellationToken);
+}

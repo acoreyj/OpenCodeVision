@@ -125,6 +125,14 @@ public class ServiceDiscoveryTests
         Assert.Null(result.Single(c => c.Key == "wsl:Ubuntu").AlternateUrl);
     }
 
+    [Fact]
+    public async Task Discover_NoWslGateway_ReturnsNativeOnly()
+    {
+        var result = await new ServiceDiscovery(null, WriteNative(NativeJson)).DiscoverAsync(CancellationToken.None);
+
+        Assert.Equal(new[] { "native" }, result.Select(c => c.Key));
+    }
+
     private static string WriteNative(string json)
     {
         var dir = Path.Combine(Path.GetTempPath(), "ocs-" + Guid.NewGuid().ToString("N"));

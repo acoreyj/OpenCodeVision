@@ -1,11 +1,11 @@
 namespace OpenCodeSticky.Core.Discovery;
 
-public sealed class ServiceDiscovery
+public sealed class ServiceDiscovery : IServiceDiscovery
 {
-    private readonly IWslGateway _wsl;
+    private readonly IWslGateway? _wsl;
     private readonly string _nativeStatePath;
 
-    public ServiceDiscovery(IWslGateway wsl, string nativeStatePath)
+    public ServiceDiscovery(IWslGateway? wsl, string nativeStatePath)
     {
         _wsl = wsl;
         _nativeStatePath = nativeStatePath;
@@ -18,21 +18,13 @@ public sealed class ServiceDiscovery
         var native = ReadNative();
         if (native is not null)
         {
-            candidates.Add(new ServiceCandidate("native", "Windows", native.Url, native.Password));
+            candidates.Add(new ServiceCandidate("native", NativeDisplayName(), native.Url, native.Password));
         }
 
-        IReadOnlyList<string> distros;
-        try
+        IReadOnlyList<string> distros = Array.Empty<string>();
+        if (_wsl is not null)
         {
             distros = await _wsl.ListDistrosAsync(cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            distros = Array.Empty<string>();
         }
 
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -68,6 +60,9 @@ public sealed class ServiceDiscovery
 
         return candidates;
     }
+
+    private static string NativeDisplayName()
+        => OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsMacOS() ? "macOS" : "Linux";
 
     private ServiceFile? ReadNative()
     {
