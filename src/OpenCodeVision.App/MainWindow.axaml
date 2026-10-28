@@ -12,6 +12,15 @@
         WindowStartupLocation="Manual"
         Background="{StaticResource WindowBackground}"
         ShowInTaskbar="True">
+  <Window.Styles>
+    <Style Selector="Button.stop:pointerover">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Button.stop:pressed">
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+  </Window.Styles>
+
   <Window.DataTemplates>
     <DataTemplate DataType="vm:ServiceHeaderViewModel">
       <TextBlock Text="{Binding Name}"
@@ -22,11 +31,13 @@
     </DataTemplate>
     <DataTemplate DataType="vm:RowViewModel">
       <Border PointerPressed="OnRowPressed"
+              PointerEntered="OnRowPointerEntered"
+              PointerExited="OnRowPointerExited"
               Background="Transparent"
               Opacity="{Binding RowOpacity}"
               Padding="10,4"
               Cursor="Hand">
-        <Grid ColumnDefinitions="4,*,Auto">
+        <Grid ColumnDefinitions="4,*,58">
           <Border Background="{Binding StateBrush}"
                   CornerRadius="2"
                   Opacity="{Binding FlashOpacity}" />
@@ -39,12 +50,54 @@
                        FontSize="12"
                        TextTrimming="CharacterEllipsis"
                        ToolTip.Tip="{Binding Tooltip}" />
+            <TextBlock Text="{Binding Timing}"
+                       FontSize="9"
+                       Foreground="{StaticResource MutedText}"
+                       TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding HasTiming}" />
           </StackPanel>
           <TextBlock Grid.Column="2"
                      Text="{Binding Elapsed}"
+                     Margin="0,0,6,0"
+                     HorizontalAlignment="Right"
+                     VerticalAlignment="Center"
                      FontSize="10"
                      Foreground="{StaticResource MutedText}"
-                     VerticalAlignment="Center" />
+                     IsVisible="{Binding ShowElapsed}" />
+          <Button Grid.Column="2"
+                  Classes="stop"
+                  Content="{Binding StopLabel}"
+                  ToolTip.Tip="{Binding StopTooltip}"
+                  Width="{Binding StopWidth}"
+                  Height="30"
+                  HorizontalAlignment="Right"
+                  Foreground="White"
+                  Background="{Binding StopBackground}"
+                  CornerRadius="6"
+                  BorderThickness="0"
+                  Padding="0"
+                  FontSize="{Binding StopFontSize}"
+                  FontWeight="Bold"
+                  Cursor="Hand"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  IsVisible="{Binding ShowStopAction}"
+                  IsEnabled="{Binding IsStopEnabled}"
+                  Click="OnStopClick">
+            <Button.Template>
+              <ControlTemplate>
+                <Border Background="{TemplateBinding Background}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                  <ContentPresenter Content="{TemplateBinding Content}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    TextElement.Foreground="{TemplateBinding Foreground}"
+                                    TextElement.FontSize="{TemplateBinding FontSize}"
+                                    TextElement.FontWeight="{TemplateBinding FontWeight}" />
+                </Border>
+              </ControlTemplate>
+            </Button.Template>
+          </Button>
         </Grid>
       </Border>
     </DataTemplate>
@@ -81,7 +134,9 @@
               FontSize="11" />
     </Grid>
 
-    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Grid.Row="1"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
       <ItemsControl x:Name="Items" Margin="0,0,0,8" />
     </ScrollViewer>
   </Grid>

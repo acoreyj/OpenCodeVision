@@ -10,6 +10,9 @@ public sealed class SessionMonitor : IAsyncDisposable
     private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(300);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(2);
 
+    private const string StepStartedEvent = "session.step.started";
+    private const string StepEndedEvent = "session.step.ended";
+
     private readonly IServiceDiscovery _discovery;
     private readonly Func<ServiceDescriptor, IOpenCodeClient> _clientFactory;
     private readonly Settings _settings;
@@ -17,6 +20,7 @@ public sealed class SessionMonitor : IAsyncDisposable
     private readonly Action<string>? _log;
     private readonly Dictionary<string, Runtime> _runtimes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, DateTimeOffset> _viewedAt = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _dismissedAt = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _cts = new();
 
@@ -199,6 +203,67 @@ public sealed class SessionMonitor : IAsyncDisposable
         try
         {
             _viewedAt[sessionId] = _time.GetUtcNow();
+            RebuildRows(_time.GetUtcNow());
+            _blockedKeys = CurrentBlockedKeys();
+            UpdateServices();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task InterruptSessionAsync(
+        string serviceKey,
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!_runtimes.TryGetValue(serviceKey, out var runtime) || !runtime.Enabled)
+            {
+                return;
+            }
+
+            var interrupted = await runtime.Client.InterruptSessionAsync(sessionId, cancellationToken);
+            if (!interrupted)
+            {
+                // The turn ended between the last refresh and the click. Treat the
+                // click as a request to drop the row instead of a no-op.
+                _dismissedAt[sessionId] = _time.GetUtcNow();
+                RebuildRows(_time.GetUtcNow());
+                _blockedKeys = CurrentBlockedKeys();
+                UpdateServices();
+                Changed?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            _log?.Invoke($"{serviceKey} {sessionId} interrupted");
+            await RefreshCoreAsync(fetchPermissions: true, cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task DismissSessionAsync(
+        string serviceKey,
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!_runtimes.TryGetValue(serviceKey, out var runtime) || !runtime.Enabled)
+            {
+                return;
+            }
+
+            // Hidden until this session's activity moves past the dismissal.
+            _dismissedAt[sessionId] = _time.GetUtcNow();
             RebuildRows(_time.GetUtcNow());
             _blockedKeys = CurrentBlockedKeys();
             UpdateServices();
@@ -418,15 +483,33 @@ public sealed class SessionMonitor : IAsyncDisposable
             var previous = runtime.Sessions.ToDictionary(session => session.Id, StringComparer.Ordinal);
             runtime.Sessions = sessions
                 .Select(session => previous.TryGetValue(session.Id, out var old)
-                    ? session with
-                    {
-                        LastEventAt = old.LastEventAt,
-                        PendingSince = old.PendingSince,
-                        PendingPermissions = old.PendingPermissions,
-                    }
+                    ? CarryRuntimeState(session, old)
                     : session)
                 .ToList();
         }
+    }
+
+    private static SessionInfo CarryRuntimeState(SessionInfo fresh, SessionInfo old)
+    {
+        var stepOpen = old.StepOpen;
+        var stepStartedAt = old.StepStartedAt;
+
+        // time.idle moves when a turn ends. If it is newer than the step we saw
+        // start, the step ended while the event stream was down.
+        if (stepStartedAt is { } started && fresh.Idle is { } idle && idle > started)
+        {
+            stepOpen = false;
+            stepStartedAt = null;
+        }
+
+        return fresh with
+        {
+            LastEventAt = old.LastEventAt,
+            PendingSince = old.PendingSince,
+            PendingPermissions = old.PendingPermissions,
+            StepOpen = stepOpen,
+            StepStartedAt = stepStartedAt,
+        };
     }
 
     private static List<SessionInfo> SessionsSnapshot(Runtime runtime)
@@ -447,7 +530,9 @@ public sealed class SessionMonitor : IAsyncDisposable
                 SessionsSnapshot(runtime)))
             .ToList();
 
-        var rows = StatusEvaluator.BuildRows(serviceSessions, LocallyViewedIds(now), now).ToList();
+        var rows = StatusEvaluator.BuildRows(serviceSessions, LocallyViewedIds(now), now)
+            .Where(row => !IsDismissed(row.Session))
+            .ToList();
 
         foreach (var runtime in online)
         {
@@ -458,7 +543,9 @@ public sealed class SessionMonitor : IAsyncDisposable
         {
             if (runtime.LastOnlineAt is { } lastOnline && now - lastOnline <= OfflineGrace)
             {
-                rows.AddRange(runtime.LastRows.Select(row => row with { IsOffline = true, IsBlocked = false }));
+                rows.AddRange(runtime.LastRows
+                    .Where(row => !IsDismissed(row.Session))
+                    .Select(row => row with { IsOffline = true, IsBlocked = false }));
             }
             else
             {
@@ -486,6 +573,18 @@ public sealed class SessionMonitor : IAsyncDisposable
         }
 
         return ids;
+    }
+
+    private bool IsDismissed(SessionInfo session)
+    {
+        if (!_dismissedAt.TryGetValue(session.Id, out var dismissedAt))
+        {
+            return false;
+        }
+
+        // Any activity newer than the dismissal brings the row back.
+        var activity = session.Updated ?? session.LastEventAt ?? session.Created;
+        return activity is null || activity <= dismissedAt;
     }
 
     private bool IsLocallyViewed(SessionInfo session)
@@ -628,10 +727,25 @@ public sealed class SessionMonitor : IAsyncDisposable
         lock (runtime.Sync)
         {
             var index = runtime.Sessions.FindIndex(session => session.Id == serverEvent.SessionId);
-            if (index >= 0)
+            if (index < 0)
             {
-                runtime.Sessions[index] = runtime.Sessions[index] with { LastEventAt = serverEvent.Created };
+                return;
             }
+
+            var session = runtime.Sessions[index] with { LastEventAt = serverEvent.Created };
+
+            // A tool run emits nothing between "called" and "success"; the step
+            // stays open for that whole window and is the only liveness signal.
+            if (string.Equals(serverEvent.Type, StepStartedEvent, StringComparison.Ordinal))
+            {
+                session = session with { StepOpen = true, StepStartedAt = serverEvent.Created };
+            }
+            else if (string.Equals(serverEvent.Type, StepEndedEvent, StringComparison.Ordinal))
+            {
+                session = session with { StepOpen = false, StepStartedAt = null };
+            }
+
+            runtime.Sessions[index] = session;
         }
     }
 

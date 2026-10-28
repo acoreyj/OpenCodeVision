@@ -4,4 +4,5 @@ Name=OpenCode Vision
 Comment=Live session status for opencode
 Exec=OpenCodeVision
 Terminal=false
+Icon=opencode-vision
 Categories=Development;

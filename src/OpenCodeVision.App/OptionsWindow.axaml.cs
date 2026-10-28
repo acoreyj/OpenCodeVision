@@ -21,6 +21,7 @@ public partial class OptionsWindow : Window
         Action<string>? log = null)
     {
         InitializeComponent();
+        Icon = AppIcon.Load();
 
         _monitor = monitor;
         _settings = settings;

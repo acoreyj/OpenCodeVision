@@ -5,7 +5,7 @@
 ```
 src/OpenCodeVision.Core      UI-free class library (net8.0)
 src/OpenCodeVision.App       Avalonia desktop app  (net8.0)
-tests/OpenCodeVision.Core.Tests   xUnit, 62 tests
+tests/OpenCodeVision.Core.Tests   xUnit, 89 tests
 ```
 
 `Core` has no reference to Avalonia and no knowledge of windows, trays or
@@ -85,6 +85,7 @@ This is the part to understand before changing `SessionMonitor`.
 | Change | Location |
 | --- | --- |
 | Color/state rules, thresholds, sorting | `Core/StatusEvaluator.cs` + tests |
+| Row time labels (`open`, `updated`) | `Core/SessionTiming.cs` + tests |
 | Discovery of services | `Core/Discovery/*` |
 | API shape, timeouts, SSE parsing | `Core/OpenCodeClient.cs`, `Core/SseParser.cs` |
 | Polling, offline grace, blocked events | `Core/SessionMonitor.cs` |
@@ -97,9 +98,11 @@ This is the part to understand before changing `SessionMonitor`.
 | --- | --- |
 | `Core/SessionMonitor.cs` | Aggregation, polling, SSE, enable/disable, view marks |
 | `Core/StatusEvaluator.cs` | Pure state derivation, blocked rule, filtering, sort |
+| `Core/SessionTiming.cs` | Pure `open`/`updated` labels for a row |
 | `Core/OpenCodeClient.cs` | Authenticated HTTP, JSON mapping, SSE subscription |
 | `Core/Discovery/ServiceDiscovery.cs` | Native + WSL candidates, alternate WSL address |
 | `Core/Settings.cs` / `SettingsStore.cs` | Locked settings model, atomic JSON persistence |
 | `App/MainWindow.axaml.cs` | Grouped rows, elapsed ticker, flash, open session |
 | `App/OptionsWindow.axaml.cs` | Toggles, service switches, rescan |
+| `App/AppIcon.cs` | Window icon from the embedded `Assets/app.png` |
 | `App/AppTrayIcon.cs` | Tray icon, menu, worst-state badge |

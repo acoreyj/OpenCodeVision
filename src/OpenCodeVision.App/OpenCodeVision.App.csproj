@@ -8,6 +8,9 @@
     <RootNamespace>OpenCodeVision.App</RootNamespace>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Windows embeds this in the apphost; the other platforms use the PNG in
+         Assets (window icon) and packaging/ (bundle and desktop entry). -->
+    <ApplicationIcon>..\..\packaging\windows\app.ico</ApplicationIcon>
     <!-- Both windows take dependencies in their constructors, so the XAML
          runtime loader cannot instantiate them. They are created in App. -->
     <NoWarn>$(NoWarn);AVLN3001</NoWarn>

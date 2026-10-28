@@ -27,6 +27,8 @@ public interface IOpenCodeClient : IDisposable
 
     Task<int> GetPendingPermissionCountAsync(string sessionId, CancellationToken cancellationToken);
 
+    Task<bool> InterruptSessionAsync(string sessionId, CancellationToken cancellationToken);
+
     IAsyncEnumerable<ServerEvent> SubscribeAsync(CancellationToken cancellationToken);
 }
 
@@ -100,6 +102,33 @@ public sealed class OpenCodeClient : IOpenCodeClient
         return document.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array
             ? data.GetArrayLength()
             : 0;
+    }
+
+    public async Task<bool> InterruptSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RequestTimeout);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            _baseUrl + "/api/session/" + Uri.EscapeDataString(sessionId) + "/interrupt");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        using var response = await _http.SendAsync(request, timeout.Token);
+        await EnsureSuccessAsync(response, timeout.Token);
+
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: timeout.Token);
+            return !document.RootElement.TryGetProperty("interrupted", out var interrupted)
+                || interrupted.ValueKind != JsonValueKind.False;
+        }
+        catch (JsonException)
+        {
+            // A successful interrupt without a parseable body still counts.
+            return true;
+        }
     }
 
     public async IAsyncEnumerable<ServerEvent> SubscribeAsync(

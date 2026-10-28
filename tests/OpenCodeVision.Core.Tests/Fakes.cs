@@ -52,6 +52,12 @@ internal sealed class FakeClient : IOpenCodeClient
 
     public int InfoCalls { get; private set; }
 
+    public bool InterruptResult { get; set; } = true;
+
+    public Exception? InterruptFailure { get; set; }
+
+    public List<string> InterruptedSessions { get; } = new();
+
     public Channel<ServerEvent>? Events { get; set; }
 
     public Task<ServerInfo> GetInfoAsync(CancellationToken cancellationToken)
@@ -76,6 +82,14 @@ internal sealed class FakeClient : IOpenCodeClient
         return Failure is null
             ? Task.FromResult(PermissionCount)
             : Task.FromException<int>(Failure);
+    }
+
+    public Task<bool> InterruptSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        InterruptedSessions.Add(sessionId);
+        return InterruptFailure is null
+            ? Task.FromResult(InterruptResult)
+            : Task.FromException<bool>(InterruptFailure);
     }
 
     public async IAsyncEnumerable<ServerEvent> SubscribeAsync(

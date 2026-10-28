@@ -4,6 +4,8 @@
 <dict>
   <key>CFBundleExecutable</key>
   <string>OpenCodeVision</string>
+  <key>CFBundleIconFile</key>
+  <string>OpenCodeVision.icns</string>
   <key>CFBundleIdentifier</key>
   <string>app.opencodevision.desktop</string>
   <key>CFBundleName</key>

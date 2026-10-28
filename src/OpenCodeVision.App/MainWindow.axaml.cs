@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using OpenCodeVision.App.ViewModels;
 using OpenCodeVision.Core;
 
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
     private readonly ObservableCollection<object> _items = new();
     private readonly Dictionary<string, RowViewModel> _rowCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DispatcherTimer> _flashTimers = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _stopInFlight = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _elapsedTimer;
     private string _signature = "";
     private OptionsWindow? _options;
@@ -26,6 +28,7 @@ public partial class MainWindow : Window
     public MainWindow(SessionMonitor monitor, Settings settings, SettingsStore store, DiagnosticsLog log)
     {
         InitializeComponent();
+        Icon = AppIcon.Load();
 
         _monitor = monitor;
         _settings = settings;
@@ -37,6 +40,7 @@ public partial class MainWindow : Window
         Opened += OnOpened;
         Closing += OnClosing;
         KeyDown += OnKeyDown;
+        Deactivated += (_, _) => ClearRowInteraction();
 
         _monitor.Changed += (_, _) => Dispatcher.UIThread.Post(Rebuild);
         _monitor.BlockedStarted += (_, args) => Dispatcher.UIThread.Post(() => StartFlash(args));
@@ -132,6 +136,12 @@ public partial class MainWindow : Window
     {
         if (e.Key != Key.Escape)
         {
+            return;
+        }
+
+        if (DisarmStops())
+        {
+            e.Handled = true;
             return;
         }
 
@@ -286,8 +296,115 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRowPointerEntered(object? sender, PointerEventArgs e)
+    {
+        if (sender is Control { DataContext: RowViewModel row })
+        {
+            row.IsHovered = true;
+        }
+    }
+
+    private void OnRowPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Control { DataContext: RowViewModel row })
+        {
+            return;
+        }
+
+        row.IsHovered = false;
+        row.DisarmStop();
+    }
+
+    private void OnStopClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        e.Handled = true;
+
+        if (sender is not Control { DataContext: RowViewModel row } || row.IsStopping)
+        {
+            return;
+        }
+
+        if (!row.IsStopConfirming)
+        {
+            foreach (var candidate in _rowCache.Values)
+            {
+                if (!ReferenceEquals(candidate, row))
+                {
+                    candidate.DisarmStop();
+                }
+            }
+
+            row.ArmStop();
+            return;
+        }
+
+        row.DisarmStop();
+        _ = StopOrHideAsync(row);
+    }
+
+    private async Task StopOrHideAsync(RowViewModel row)
+    {
+        if (!_stopInFlight.Add(row.SessionId))
+        {
+            return;
+        }
+
+        row.IsStopping = true;
+        try
+        {
+            if (row.CanStop)
+            {
+                await _monitor.InterruptSessionAsync(row.ServiceKey, row.SessionId);
+            }
+            else
+            {
+                await _monitor.DismissSessionAsync(row.ServiceKey, row.SessionId);
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Write("stop session failed: " + exception.Message);
+        }
+        finally
+        {
+            row.IsStopping = false;
+            _stopInFlight.Remove(row.SessionId);
+        }
+    }
+
+    private bool DisarmStops()
+    {
+        var armed = false;
+        foreach (var row in _rowCache.Values)
+        {
+            if (!row.IsStopConfirming)
+            {
+                continue;
+            }
+
+            row.DisarmStop();
+            armed = true;
+        }
+
+        return armed;
+    }
+
+    private void ClearRowInteraction()
+    {
+        foreach (var row in _rowCache.Values)
+        {
+            row.IsHovered = false;
+            row.DisarmStop();
+        }
+    }
+
     private async void OnRowPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null)
+        {
+            return;
+        }
+
         if (sender is not Control { DataContext: RowViewModel row })
         {
             return;
@@ -323,7 +440,7 @@ public partial class MainWindow : Window
 
         try
         {
-            _ = launcher.LaunchUriAsync(new Uri(service.Url, "/session/" + row.SessionId));
+            _ = launcher.LaunchUriAsync(SessionLink.For(service.Url, row.SessionId));
         }
         catch (Exception exception)
         {

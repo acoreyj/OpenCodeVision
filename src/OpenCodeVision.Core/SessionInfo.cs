@@ -14,4 +14,10 @@ public sealed record SessionInfo
     public DateTimeOffset? Viewed { get; init; }
     public DateTimeOffset? LastEventAt { get; init; }
     public DateTimeOffset? PendingSince { get; init; }
+
+    /// <summary>True while opencode has an assistant step in flight for this session.</summary>
+    public bool StepOpen { get; init; }
+
+    /// <summary>When the open step started, used to bound a stale <see cref="StepOpen"/>.</summary>
+    public DateTimeOffset? StepStartedAt { get; init; }
 }

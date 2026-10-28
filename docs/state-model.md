@@ -8,8 +8,19 @@ Everything here is implemented in `Core/StatusEvaluator.cs` and covered by
 - Top-level only: a session with a non-null `parentID` is a subagent session and
   is always hidden.
 - Recent: last activity (`Updated`, else `LastEventAt`, else `Created`) within
-  **30 minutes**.
+  **30 minutes**. A session with an open step is kept regardless of age.
 - Blocked sessions appear regardless of age, subject to the blue expiry below.
+- Dismissed rows stay hidden until activity is newer than the dismissal. The
+  hide is in-memory only; a restart shows the row again.
+
+## Stopping and hiding
+
+The row's hover `✕` is a two-click action: the first click arms `Stop?` or
+`Hide?`, the second performs it. Green (`Working`) and amber
+(`WaitingApproval`) rows call `POST /api/session/{id}/interrupt`. Every other
+row, including offline rows and rows that turn out to be idle, is hidden
+locally until its next update. Moving the pointer away, pressing `Esc`, or
+deactivating the window cancels an armed action.
 
 ## States
 
@@ -26,7 +37,8 @@ Everything here is implemented in `Core/StatusEvaluator.cs` and covered by
 `Evaluate(session, viewedLocally, now)` checks in this order:
 
 1. `PendingPermissions > 0` → **WaitingApproval**.
-2. Last activity within **20 s** and not quiet → **Working**.
+2. An open step, or last activity within **20 s** and not quiet → **Working**.
+   - Open step = `StepOpen` with `StepStartedAt` no more than **30 minutes** old.
    - Last activity = `max(Updated, LastEventAt)`.
    - Quiet = `Idle` exists and `Updated <= Idle + 2 s`.
 3. `outcome == "failed"` → **Errored**.
@@ -37,6 +49,30 @@ Everything here is implemented in `Core/StatusEvaluator.cs` and covered by
 
 The 20-second grace keeps a session green between tool calls. A session with no
 `idle` and stale `updated` falls through to idle instead of staying green.
+
+### Open steps
+
+A shell call can run for minutes. Opencode emits nothing and leaves
+`time.updated` untouched until the tool returns, so the grace window alone made
+rows go grey mid-build. The event stream brackets that window:
+
+```
+session.step.started    → StepOpen = true, StepStartedAt = event time
+session.tool.called     (no state change; still an event for LastEventAt)
+   … tool runs, no events …
+session.tool.success
+session.step.ended      → StepOpen = false
+```
+
+`StepOpen` is held in memory only; `/api/session` does not return it, so
+`SessionMonitor` carries it across every refresh. An open step outranks the
+quiet flag and the 20-second grace, but not a pending permission.
+
+The **30-minute ceiling** bounds a step whose `step.ended` frame was lost, and a
+refresh also closes the step when the service reports `time.idle` newer than the
+step start (the turn ended while the stream was down). If neither happens the
+row falls back to the normal rules. Services that never emit step events keep
+the 20-second behaviour.
 
 ## Blocked
 
@@ -63,11 +99,32 @@ Approximate, from opencode's own timestamps:
 `ElapsedFormatter.Format` clamps negative spans to `0s`, so clock skew or a
 future timestamp displays as `0s` rather than a negative duration.
 
+## Session age and last update
+
+A line under the title shows how old the session itself is and how long ago
+opencode last touched it. Both come from `Core/SessionTiming.cs` and share
+`ElapsedFormatter`'s `s`/`m`/`h`/`d` buckets:
+
+| Label | Source |
+| --- | --- |
+| `open 2h` | `now - Created` |
+| `updated 5m ago` | `now - (Updated ?? LastEventAt)` |
+
+A missing `Created` drops the `open` half; a missing `Updated` and
+`LastEventAt` drops the `updated` half; with neither the line is hidden. The
+full line reads `open 2h · updated 5m ago`. It is display-only: it does not
+affect inclusion, state, blocked, or sort. The tooltip carries the exact local
+clock times for both.
+
 ## Ordering and grouping
 
-1. Blocked rows first, longest-blocked first.
-2. Then everything else by last activity, newest first.
-3. Ties by title.
+1. Blocked rows first, longest-blocked first (ties by title).
+2. Unblocked rows by color urgency: red, green, grey.
+3. Within a color, title order, then session id.
+
+Message timestamps are not part of the sort. A row only changes position when
+its color changes, or when a row is added or removed, so incoming messages
+cannot shuffle a list that is being read.
 
 The window emits **one header per service**, in the order each service first
 appears in that sorted list. Rows inside a group keep the sorted order, so the

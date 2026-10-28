@@ -46,6 +46,7 @@ if (Test-Path $linuxStage) { Remove-Item -Recurse -Force $linuxStage }
 New-Item -ItemType Directory -Force $linuxStage | Out-Null
 Copy-Item (Join-Path $artifacts 'linux-x64/OpenCodeVision') $linuxStage
 Copy-Item (Join-Path $root 'packaging/linux/opencode-vision.desktop') $linuxStage
+Copy-Item (Join-Path $root 'packaging/linux/opencode-vision.png') $linuxStage
 if (Test-Path (Join-Path $root 'README.md')) {
     Copy-Item (Join-Path $root 'README.md') $linuxStage
 }
@@ -65,7 +66,7 @@ foreach ($arch in @('x64', 'arm64')) {
 
     Copy-Item (Join-Path $artifacts "$rid/OpenCodeVision") (Join-Path $contents 'MacOS/OpenCodeVision')
     Copy-Item (Join-Path $root 'packaging/macos/Info.plist') (Join-Path $contents 'Info.plist')
-    Copy-Item (Join-Path $root 'src/OpenCodeVision.App/Assets/tray-idle.png') (Join-Path $contents 'Resources/app.png')
+    Copy-Item (Join-Path $root 'packaging/macos/OpenCodeVision.icns') (Join-Path $contents 'Resources/OpenCodeVision.icns')
 
     $published = Get-ChildItem (Join-Path $artifacts $rid) -File
     foreach ($file in $published) {

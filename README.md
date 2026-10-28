@@ -19,8 +19,13 @@ waiting for you, or blocked.
 | red | last turn failed |
 
 Rows are grouped by opencode service. Blocked sessions sort to the top and
-keep the longest wait first. Only top-level sessions are shown; subagent
-sessions are hidden.
+keep the longest wait first. The remaining rows group by color (red, green,
+grey) and stay in title order inside a color, so new messages do not reshuffle
+the list. Only top-level sessions are shown; subagent sessions are hidden.
+
+Each row shows how long the session has been open and how long ago it last
+updated (`open 2h · updated 5m ago`). The right edge shows how long the row has
+been in its current state. Hover a row for the exact local times.
 
 ## What it watches
 
@@ -31,7 +36,8 @@ sessions are hidden.
 
 It discovers services on startup and every 60 seconds. The options screen
 lists each service with an on/off switch; choices are remembered. Nothing is
-sent to opencode except authenticated read requests and the event stream.
+sent to opencode except authenticated read requests, the event stream, and an
+explicit stop request from the row's hover control.
 
 ## Run
 
@@ -56,7 +62,10 @@ desktop installs but absent from a headless WSL image. The tray icon depends
 on the desktop's tray support; if it is unavailable the window still works and
 `Quit` is done by closing the window.
 
-The archive also contains `opencode-vision.desktop` for menu integration.
+The archive also contains `opencode-vision.desktop` and `opencode-vision.png`
+for menu integration; copy the PNG to
+`~/.local/share/icons/hicolor/256x256/apps/` and the desktop entry to
+`~/.local/share/applications/`.
 
 ### macOS
 
@@ -81,6 +90,10 @@ the Avalonia, HarfBuzz and Skia native libraries next to the executable.
 
 - Gear: options (always on top, flash on block, per-service switches, rescan).
 - Click a row: mark it viewed and open that session in your browser.
+- Hover a row: a red `✕` button appears on the right. Click it once to arm
+  `Stop?`/`Hide?`, then click again to confirm. A running session is
+  interrupted; a finished one is hidden until its next update. Moving away or
+  pressing `Esc` cancels the confirm.
 - Close: hide to the tray on Windows and macOS. On Linux, where tray support
   varies, close quits the app and the window stays in the taskbar while open.
 - Quit: from the tray menu where a tray is available.
@@ -143,4 +156,5 @@ are tarballs so executable bits survive.
   password. Sessions that live only in that sidecar are not visible to the
   sticky; see [the upstream request](docs/upstream-desktop-sidecar.md).
 - Always-on-top and tray behavior depend on the Linux desktop environment.
-- The app reads opencode's local API; it never edits sessions or the database.
+- The app reads opencode's local API and can interrupt an active turn. It
+  never edits session history, sends prompts, or touches the database.

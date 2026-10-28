@@ -93,7 +93,7 @@ public sealed class AppTrayIcon : IDisposable
                 blocked++;
             }
 
-            if (Priority(row.State) > Priority(worst))
+            if (StatusEvaluator.Priority(row.State) > StatusEvaluator.Priority(worst))
             {
                 worst = row.State;
             }
@@ -128,15 +128,6 @@ public sealed class AppTrayIcon : IDisposable
             _window.Activate();
         }
     }
-
-    private static int Priority(SessionState state) => state switch
-    {
-        SessionState.WaitingApproval => 4,
-        SessionState.WaitingForYou => 3,
-        SessionState.Errored => 2,
-        SessionState.Working => 1,
-        _ => 0,
-    };
 
     private static WindowIcon LoadIcon(SessionState state)
     {

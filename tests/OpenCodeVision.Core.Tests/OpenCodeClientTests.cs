@@ -89,6 +89,52 @@ public class OpenCodeClientTests
     }
 
     [Fact]
+    public async Task Interrupt_PostsToInterruptEndpoint()
+    {
+        string? requestedPath = null;
+        HttpMethod? method = null;
+        var handler = new StubHandler(request =>
+        {
+            requestedPath = request.RequestUri!.AbsolutePath;
+            method = request.Method;
+            return Json("{\"interrupted\":true}");
+        });
+        using var client = new OpenCodeClient(new Uri("http://127.0.0.1:28894"), "pw", handler);
+
+        var interrupted = await client.InterruptSessionAsync("ses_1", CancellationToken.None);
+
+        Assert.True(interrupted);
+        Assert.Equal(HttpMethod.Post, method);
+        Assert.Equal("/api/session/ses_1/interrupt", requestedPath);
+    }
+
+    [Fact]
+    public async Task Interrupt_ReadsInterruptedFlag()
+    {
+        var handler = new StubHandler(_ => Json("{\"interrupted\":false}"));
+        using var client = new OpenCodeClient(new Uri("http://127.0.0.1:28894"), "pw", handler);
+
+        var interrupted = await client.InterruptSessionAsync("ses_1", CancellationToken.None);
+
+        Assert.False(interrupted);
+    }
+
+    [Fact]
+    public async Task Interrupt_NonSuccessStatus_ThrowsOpenCodeException()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Conflict)
+        {
+            Content = new StringContent("{\"_tag\":\"ConflictError\"}"),
+        });
+        using var client = new OpenCodeClient(new Uri("http://127.0.0.1:28894"), "pw", handler);
+
+        var error = await Assert.ThrowsAsync<OpenCodeException>(
+            () => client.InterruptSessionAsync("ses_1", CancellationToken.None));
+
+        Assert.Equal(409, error.StatusCode);
+    }
+
+    [Fact]
     public async Task NonSuccessStatus_ThrowsOpenCodeException()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized)

@@ -13,7 +13,8 @@ behavior that cannot be fully verified on the build machine.
 ## Local HTTP API instead of the database or terminal scraping
 
 **Decision:** read `/api/session`, `/api/session/{id}/permission` and
-`/api/event` from each running service.
+`/api/event` from each running service. The only write is
+`POST /api/session/{id}/interrupt` from the explicit hover control.
 **Why:** no schema coupling, no terminal parsing, live updates, and it works the
 same for native and WSL services.
 **Cost:** depends on opencode's HTTP surface and version drift; requires the
@@ -27,6 +28,19 @@ service.
 **Why:** responsive without trusting one event type, resilient without hammering.
 **Cost:** two sources of truth to keep consistent; permission counts are still
 polled rather than event-driven.
+
+## Working follows open steps, not just the last timestamp
+
+**Decision:** a session is green while an opencode step is open
+(`session.step.started` … `session.step.ended`), not only while
+`max(updated, last event)` is under 20 seconds. The step is capped at 30 minutes
+and is also closed when a refresh reports a newer `time.idle`.
+**Why:** a shell call emits nothing and does not move `time.updated` while it
+runs, so a build longer than 20 seconds showed grey while the TUI still said
+`esc interrupt`.
+**Cost:** one more piece of in-memory state that the HTTP API does not return,
+carried across every refresh; a service that emits step events but loses the
+closing frame stays green until the cap or the next idle timestamp.
 
 ## One window, not one sticky per session
 
@@ -44,8 +58,18 @@ state.
 ## Color-only, no notifications
 
 **Decision:** state color plus optional row flashing; a tray dot when hidden.
-**Why:** the app is a sticky note, not a notification system; no interruption.
+**Why:** the app is a sticky note, not a notification system; no popups.
 **Cost:** a block can be missed if the window is hidden and the tray is ignored.
+
+## Stable color-first ordering
+
+**Decision:** blocked rows first (longest wait first), then red, green, grey,
+with title order inside each color. Message timestamps are not a sort key.
+**Why:** a working session gets messages every few seconds, so ordering by last
+activity made rows jump while their color stayed the same. Color is the signal
+the list exists to show.
+**Cost:** recently active idle rows no longer float to the top, and rows inside
+a color are alphabetical rather than chronological.
 
 ## 30 minutes / 24 hours / 5 minutes / 20 seconds
 

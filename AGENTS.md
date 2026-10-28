@@ -19,7 +19,7 @@ Packaging needs WSL for `tar`/`wslpath`.
 
 - `src/OpenCodeVision.Core` — discovery, HTTP/SSE, state rules, settings, monitor
 - `src/OpenCodeVision.App` — Avalonia window, options dialog, tray, diagnostics log
-- `tests/OpenCodeVision.Core.Tests` — 62 tests, fakes in `Fakes.cs`
+- `tests/OpenCodeVision.Core.Tests` — 89 tests, fakes in `Fakes.cs`
 - `packaging/` — `.desktop`, `Info.plist`, icon generator
 - `scripts/package.ps1` — publish + archive four RIDs
 - `artifacts/` — generated, git-ignored
@@ -61,7 +61,7 @@ Packaging needs WSL for `tar`/`wslpath`.
 ## Verifying
 
 - Run `dotnet test` before claiming a core change is done; the suite must be
-  green (62 tests at this commit).
+  green (89 tests at this commit).
 - UI changes need the live checklist in `docs/development.md`, including the
   packaged build.
 - Packaging changes need `scripts/package.ps1` and a check of each archive:

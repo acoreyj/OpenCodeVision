@@ -1,7 +1,8 @@
 # opencode API used by this app
 
-The app only reads local HTTP endpoints. It never writes sessions, edits the
-database, or installs a plugin.
+The app reads local HTTP endpoints and makes one explicit write: interrupting
+an active session. It never edits session history, sends prompts, approves
+permissions, or installs a plugin.
 
 ## Service files
 
@@ -46,9 +47,22 @@ response as a connection failure and retries on the next refresh.
 | GET | `/api/info` | Liveness, version, pid |
 | GET | `/api/session` | Session list (one page; no cursor following) |
 | GET | `/api/session/{id}/permission` | Pending permission count for one session |
+| POST | `/api/session/{id}/interrupt` | Stop the session's active execution |
 | GET | `/api/event` | Server-sent events (long-lived) |
 
 `/api/session/{id}` exists but the app does not need it.
+
+### `/api/session/{id}/interrupt` shape
+
+The app posts with no body. A successful response is:
+
+```json
+{ "interrupted": true }
+```
+
+`false` means no execution owned by this service was active; the row is then
+hidden until its next update. The endpoint is `interrupt`, not the older
+`abort` route: native opencode 2.2.0 exposes only the former.
 
 ### `/api/session` shape
 
@@ -94,15 +108,38 @@ data: {"id":"evt_…","created":1793111975256,"type":"session.tool.success",
 : heartbeat
 ```
 
-Observed types include `server.connected`, `session.tool.success`,
-`shell.exited`, `message.updated`, `message.part.updated`. The client does not
+Observed types include `server.connected`, `session.step.started`,
+`session.step.streamed`, `session.step.ended`, `session.tool.called`,
+`session.tool.input.started`, `session.tool.input.ended`,
+`session.tool.progress`, `session.tool.success`, `session.reasoning.started`,
+`session.reasoning.delta`, `session.usage.updated`, `shell.exited`,
+`shell.deleted`, `message.updated`, `message.part.updated`. The client does not
 depend on a fixed list:
 
 - Every event with a `sessionID` updates that session's `LastEventAt`.
 - Every event schedules a debounced refresh (300 ms).
+- `session.step.started` opens a step (`StepOpen`, `StepStartedAt`);
+  `session.step.ended` closes it. This is what keeps a row green while a tool
+  runs, because a long tool emits nothing between `session.tool.called` and
+  `session.tool.success`. See `docs/state-model.md`.
 - An event whose type contains `permission` (case-insensitive) also refreshes
   permission counts.
 - Malformed frames are skipped without terminating the stream.
+
+## Session links
+
+Clicking a row opens the service's web UI at the session. The web app routes a
+session as:
+
+```
+http://127.0.0.1:28894/server/{key}/session/{id}
+```
+
+`{key}` is the unpadded base64url (UTF-8) of the service URL with any trailing
+slash removed, e.g. `http://127.0.0.1:28894` becomes
+`aHR0cDovLzEyNy4wLjAuMTo0OTM3NA`. The older `/session/{id}` form is not a route
+in 2.x and renders "Unrecognised route!". `SessionLink.For` owns this mapping;
+the caller falls back to the service root when the link cannot be built.
 
 ## The desktop app sidecar
 
@@ -134,4 +171,5 @@ exceptions. Options shows each service's version so drift is visible.
 - Remote services are not supported.
 - The `session.permission` field is not used; the permission endpoint is the
   source of truth.
-- No writes, approvals, or prompt sending.
+- No approvals, prompt sending, session deletion, or history edits. The only
+  write is the interrupt request.

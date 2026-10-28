@@ -18,7 +18,7 @@ dotnet test tests/OpenCodeVision.Core.Tests
 dotnet run --project src/OpenCodeVision.App
 ```
 
-The test suite is the fast gate: 62 tests, no network, no UI.
+The test suite is the fast gate: 89 tests, no network, no UI.
 
 ## Project layout
 
@@ -61,18 +61,30 @@ It publishes and packages:
 Packaging details:
 
 - Windows zip contains the exe and README.
-- Linux tar contains the binary, `.desktop` entry, README; `chmod +x` is applied
-  through WSL.
+- Linux tar contains the binary, `.desktop` entry, `opencode-vision.png`,
+  README; `chmod +x` is applied through WSL.
 - macOS tar contains `OpenCodeVision.app` (executable + three dylibs +
-  `Info.plist` + icon) and the README. The script asserts the bundle contains
-  every file from the publish directory.
+  `Info.plist` + `Resources/OpenCodeVision.icns`) and the README. The script
+  asserts the bundle contains every file from the publish directory.
 - macOS signing is not performed; see [Platforms](platforms.md).
 
 ## Icons
 
-`packaging/make-icons.ps1` draws five 64×64 tray PNGs into
-`src/OpenCodeVision.App/Assets/`. Run it only when changing the palette or icon
-shape, then commit the PNGs.
+`packaging/make-icons.ps1` needs ImageMagick 7 (`magick` on `PATH`) and reads
+`packaging/icon-source.jpg` — the disc artwork centred on a square canvas. It
+crops and circular-masks the art, then writes:
+
+- `src/OpenCodeVision.App/Assets/app.png` — window and taskbar icon (256 px).
+- `packaging/windows/app.ico` — embedded in the Windows executable through
+  `ApplicationIcon`.
+- `packaging/macos/OpenCodeVision.icns` — referenced by `CFBundleIconFile`;
+  ImageMagick has no ICNS writer, so the script packs the PNG sizes itself.
+- `packaging/linux/opencode-vision.png` — installed alongside the desktop entry.
+- `src/OpenCodeVision.App/Assets/tray-<state>.png` — the logo at 64 px, muted,
+  with a state-coloured LED in the lower-right corner (`idle`, `working`,
+  `approval`, `waiting`, `errored`).
+
+Run it only when the artwork or the palette changes, then commit the outputs.
 
 ## Version pin
 

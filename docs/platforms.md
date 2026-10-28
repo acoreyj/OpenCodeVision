@@ -43,9 +43,11 @@ the shared background service remain visible everywhere.
 - **Runtime libraries**: needs the usual X11 stack (`libX11`, `libICE`,
   `libSM`) and fontconfig. A headless WSL image has none of these and stops at
   `libICE` before opening a window.
-- **Packaging**: single ELF x64 binary plus `opencode-vision.desktop` in a
-  tar.gz. The desktop entry assumes the binary is on `PATH`; extract and add it
-  to `PATH`, or edit `Exec=` to an absolute path.
+- **Packaging**: single ELF x64 binary plus `opencode-vision.desktop` and
+  `opencode-vision.png` in a tar.gz. The desktop entry assumes the binary is on
+  `PATH`; extract and add it to `PATH`, or edit `Exec=` to an absolute path. Copy
+  the PNG to `~/.local/share/icons/hicolor/256x256/apps/` so the menu entry has
+  an icon.
 
 ## macOS
 
@@ -53,8 +55,9 @@ the shared background service remain visible everywhere.
 - **Window/tray**: Avalonia with `NSStatusItem` for the tray. Close hides to the
   tray.
 - **Packaging**: `OpenCodeVision.app` with `Contents/MacOS/OpenCodeVision`, the
-  three native dylibs (Avalonia, HarfBuzz, Skia), `Info.plist`, and an app PNG.
-  Shipped as `macos-x64` and `macos-arm64` tarballs.
+  three native dylibs (Avalonia, HarfBuzz, Skia), `Info.plist`, and
+  `Contents/Resources/OpenCodeVision.icns`. Shipped as `macos-x64` and
+  `macos-arm64` tarballs.
 - **Signing**: the bundle is built on Windows and is unsigned. Apple Silicon
   refuses unsigned bundles, so run this once on the Mac:
 
@@ -70,8 +73,8 @@ the shared background service remain visible everywhere.
 | Platform | Verified |
 | --- | --- |
 | Windows 11 x64 | Full runtime: discovery of native 2.2.0 + Ubuntu WSL 2.1.4, row updates, options toggles, close-to-tray. |
-| Linux x64 | Build only. ELF binary launches; headless WSL stops at missing `libICE`. |
-| macOS x64 / arm64 | Package only. Correct Mach-O architectures, dylibs present, unsigned. |
+| Linux x64 | Build only. ELF binary launches; headless WSL stops at missing `libICE`. Desktop entry and PNG are in the tar. |
+| macOS x64 / arm64 | Package only. Correct Mach-O architectures, dylibs and `Resources/OpenCodeVision.icns` present, unsigned. |
 
 ## Cross-publishing
 

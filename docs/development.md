@@ -22,7 +22,7 @@ For a new rule:
 1. Write the failing test with a fixed `now` and explicit timestamps.
 2. Run it and confirm the failure is the missing behavior.
 3. Implement the smallest change.
-4. Run the whole suite (62 tests at the time of writing).
+4. Run the whole suite (89 tests at the time of writing).
 5. Commit with a message describing the behavior.
 
 Fakes live in `Fakes.cs`: `FakeClient`, `FakeDiscovery`,
@@ -35,8 +35,8 @@ Fakes live in `Fakes.cs`: `FakeClient`, `FakeDiscovery`,
    new branch and the branches it precedes.
 3. Add a color constant in `StateBrushes` (`App/ViewModels/RowViewModel.cs`) and
    the matching resource in `App.axaml`.
-4. Update `AppTrayIcon.Priority` and add a `tray-<name>.png` via
-   `packaging/make-icons.ps1`.
+4. Update `AppTrayIcon.Priority` and add the state colour to
+   `packaging/make-icons.ps1`, then regenerate the tray PNGs.
 5. Update `docs/state-model.md` and the palette in `README.md`.
 6. Verify against a live session before claiming it works.
 
@@ -46,7 +46,7 @@ All thresholds have one owner:
 
 | Threshold | Location |
 | --- | --- |
-| 30-minute recency, 24-hour blue, 20-second working grace, 2-second idle tolerance | `StatusEvaluator` |
+| 30-minute recency, 24-hour blue, 20-second working grace, 2-second idle tolerance, 30-minute step ceiling | `StatusEvaluator` |
 | 10-second refresh, 60-second rescan, 5-minute offline grace, 300 ms debounce, 2-second reconnect | `SessionMonitor` |
 | 5-second request timeout | `OpenCodeClient` |
 | 6-second flash, 500 ms pulse, 1-second elapsed tick | `MainWindow` |
@@ -73,9 +73,13 @@ Automated tests cover Core only. Before merging a UI change:
    `settings.json` updates.
 3. Toggle always-on-top over a maximized window.
 4. Trigger a block (permission prompt or finished turn) and watch the row flash.
-5. Click a row; confirm the browser opens and the row turns grey.
-6. Close to tray and restore on Windows/macOS; on Linux confirm close quits.
-7. Run the packaged exe, not just `dotnet run`.
+5. Click a row; confirm the browser opens that session (not the connect screen
+   or "Unrecognised route!") and the row turns grey.
+6. Hover a working row; click `✕`, confirm it becomes `Stop?`, click again and
+   watch the turn stop. Hover an idle row, confirm `Hide?`, and check the row
+   stays hidden until that session next updates.
+7. Close to tray and restore on Windows/macOS; on Linux confirm close quits.
+8. Run the packaged exe, not just `dotnet run`.
 
 ## Code style
 

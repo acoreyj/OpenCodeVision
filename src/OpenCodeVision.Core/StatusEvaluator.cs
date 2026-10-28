@@ -6,6 +6,7 @@ public static class StatusEvaluator
     public static readonly TimeSpan WorkingGrace = TimeSpan.FromSeconds(20);
     public static readonly TimeSpan IdleTolerance = TimeSpan.FromSeconds(2);
     public static readonly TimeSpan BlueLifetime = TimeSpan.FromHours(24);
+    public static readonly TimeSpan StepCeiling = TimeSpan.FromMinutes(30);
 
     public static SessionState Evaluate(SessionInfo session, bool viewedLocally, DateTimeOffset now)
     {
@@ -18,7 +19,10 @@ public static class StatusEvaluator
         var quiet = session.Idle is { } idle
             && (session.Updated is null || session.Updated <= idle + IdleTolerance);
 
-        if (lastActivity is { } activity && now - activity <= WorkingGrace && !quiet)
+        // A long tool run emits nothing and leaves updated behind, so an open
+        // step outranks both the quiet flag and the grace window.
+        if (HasOpenStep(session, now)
+            || (lastActivity is { } activity && now - activity <= WorkingGrace && !quiet))
         {
             return SessionState.Working;
         }
@@ -61,6 +65,15 @@ public static class StatusEvaluator
         };
     }
 
+    /// <summary>
+    /// True while opencode reported an assistant step that has not ended yet.
+    /// The ceiling bounds a step whose <c>session.step.ended</c> frame was lost.
+    /// </summary>
+    public static bool HasOpenStep(SessionInfo session, DateTimeOffset now)
+        => session.StepOpen
+            && session.StepStartedAt is { } started
+            && now - started <= StepCeiling;
+
     public static IReadOnlyList<SessionRow> BuildRows(
         IEnumerable<ServiceSessions> services,
         IReadOnlySet<string> viewedLocally,
@@ -83,7 +96,9 @@ public static class StatusEvaluator
                 var blocked = IsBlocked(state, since, now);
                 var lastActivity = session.Updated ?? session.LastEventAt ?? session.Created;
 
-                if (!blocked && (lastActivity is null || lastActivity < cutoff))
+                if (!blocked
+                    && !HasOpenStep(session, now)
+                    && (lastActivity is null || lastActivity < cutoff))
                 {
                     continue;
                 }
@@ -99,13 +114,31 @@ public static class StatusEvaluator
             }
         }
 
-        return rows
-            .OrderByDescending(r => r.IsBlocked)
-            .ThenBy(r => r.IsBlocked ? r.StateSince : DateTimeOffset.MaxValue)
-            .ThenByDescending(r => r.Session.Updated ?? r.Session.LastEventAt ?? r.Session.Created ?? DateTimeOffset.MinValue)
+        var blockedRows = rows
+            .Where(r => r.IsBlocked)
+            .OrderBy(r => r.StateSince)
             .ThenBy(r => r.Session.Title, StringComparer.Ordinal)
-            .ToList();
+            .ThenBy(r => r.Session.Id, StringComparer.Ordinal);
+
+        // Color is the only thing that moves a row once it is on screen. Within a
+        // color the order is title-based so message updates cannot shuffle it.
+        var unblockedRows = rows
+            .Where(r => !r.IsBlocked)
+            .OrderByDescending(r => Priority(r.State))
+            .ThenBy(r => r.Session.Title, StringComparer.Ordinal)
+            .ThenBy(r => r.Session.Id, StringComparer.Ordinal);
+
+        return blockedRows.Concat(unblockedRows).ToList();
     }
+
+    public static int Priority(SessionState state) => state switch
+    {
+        SessionState.WaitingApproval => 4,
+        SessionState.WaitingForYou => 3,
+        SessionState.Errored => 2,
+        SessionState.Working => 1,
+        _ => 0,
+    };
 
     private static DateTimeOffset? Max(DateTimeOffset? a, DateTimeOffset? b)
     {
